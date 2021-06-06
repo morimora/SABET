@@ -1,0 +1,48 @@
+<repast.simphony.data2.engine.DataSetDescriptor simphonyVersion="2.8.0">
+  <name>IMM Statistics</name>
+  <type>AGGREGATE</type>
+  <inclTick>true</inclTick>
+  <inclBatchRun>false</inclBatchRun>
+  <inclRandomSeed>false</inclRandomSeed>
+  <scheduleParams>
+    <start>1.0</start>
+    <interval>1.0</interval>
+    <priority>-Infinity</priority>
+    <pType>LAST</pType>
+    <duration>-1.0</duration>
+    <frequency>REPEAT</frequency>
+    <hashCode>294276659</hashCode>
+  </scheduleParams>
+  <atEnd>false</atEnd>
+  <methodDataSources class="linked-hash-map">
+    <entry>
+      <string>Loans</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Loans</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportTotalLoans</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Loan Requests</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Loan Requests</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportLoanRequests</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+  </methodDataSources>
+  <countSources class="linked-hash-map">
+    <entry>
+      <string>Banks</string>
+      <repast.simphony.data2.engine.CountSourceDefinition>
+        <typeName>net.sabet.agents.Bank</typeName>
+        <id>Banks</id>
+      </repast.simphony.data2.engine.CountSourceDefinition>
+    </entry>
+  </countSources>
+  <customNADataSources class="linked-hash-map"/>
+  <customAggDataSources class="linked-hash-map"/>
+</repast.simphony.data2.engine.DataSetDescriptor>

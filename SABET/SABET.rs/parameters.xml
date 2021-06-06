@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<parameters>
+					<parameter name="leverage_ratio" displayName="Leverage Ratio" type="double" 
+						defaultValue="0.03" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="standard_deviation_of_large_banks_assets" displayName="Total assets of large banks (std. dev., million Euro)" type="double" 
+						defaultValue="7134.148" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="bank_count" displayName="Bank count" type="int" 
+						defaultValue="10" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
+											/>
+				<parameter name="share_of_securities_in_assets" displayName="Maximum share of securities in assets" type="double" 
+						defaultValue="0.4" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="interbank_claims_risk_weight" displayName="Weight of interbank claims risk" type="double" 
+						defaultValue="0.2" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="mean_of_medium_banks_assets" displayName="Total assets of medium banks (mean, million Euro)" type="double" 
+						defaultValue="16100.038" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="capital_adequacy_ratio" displayName="Capital Adequacy Ratio (CAR)" type="double" 
+						defaultValue="0.08" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="maximum_firesale_loss_coefficient" displayName="Maximum coefficient of asset loss in firesale" type="double" 
+						defaultValue="0.15" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="probability_of_bankruptcy" displayName="Probability of bankruptcy" type="double" 
+						defaultValue="0.5" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="mean_of_large_banks_assets" displayName="Total assets of large banks (mean, million Euro)" type="double" 
+						defaultValue="35670.742" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="small_banks_share" displayName="Market share of small banks" type="double" 
+						defaultValue="0.15" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="large_banks_share" displayName="Market share of large banks" type="double" 
+						defaultValue="0.6" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="corridor_lower_limit" displayName="Lower bound of interest rate corridor" type="double" 
+						defaultValue="0.0" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="client_credits_risk_weight" displayName="Weight of client's credits risk" type="double" 
+						defaultValue="1.0" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="capital_buffer_coefficient" displayName="Capital Buffer coefficient" type="double" 
+						defaultValue="0.025" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="maximum_loan_duration" displayName="Maximum duration for loan" type="int" 
+						defaultValue="1" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
+											/>
+				<parameter name="medium_banks_share" displayName="Market share of medium banks" type="double" 
+						defaultValue="0.25" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="randomSeed" displayName="Default Random Seed" type="int" 
+						defaultValue="__NULL__"
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
+											/>
+				<parameter name="counterparties_maximum" displayName="Maximum number of counterparties" type="int" 
+						defaultValue="3" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
+											/>
+				<parameter name="cash_reserve_ratio" displayName="Cash and Reserve Ratio" type="double" 
+						defaultValue="0.01" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="mean_of_small_banks_assets" displayName="Total assets of small banks (mean, million Euro)" type="double" 
+						defaultValue="9640.741" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="standard_deviation_of_medium_banks_assets" displayName="Total assets of medium banks (std. dev., million Euro)" type="double" 
+						defaultValue="3220.008" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="corridor_upper_limit" displayName="Upper bound of interest rate corridor" type="double" 
+						defaultValue="0.02" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="standard_deviation_of_small_banks_assets" displayName="Total assets of small banks (std. dev., million Euro)" type="double" 
+						defaultValue="1928.148" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="interest_rate_for_term_deposits" displayName="Interest rate for term deposits" type="double" 
+						defaultValue="0.01" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="lower_limit_of_uncertainty" displayName="Lower limit of uncertainty" type="double" 
+						defaultValue="0.1" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+				<parameter name="upper_limit_of_uncertainty" displayName="Upper limit of uncertainty" type="double" 
+						defaultValue="0.25" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
+											/>
+		</parameters>
+
+

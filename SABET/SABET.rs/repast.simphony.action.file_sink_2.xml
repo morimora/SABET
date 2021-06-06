@@ -1,0 +1,14 @@
+<repast.simphony.data2.engine.FileSinkDescriptor simphonyVersion="2.8.0">
+  <name>IMM Statistics</name>
+  <dataSet>IMM Statistics</dataSet>
+  <delimiter>,</delimiter>
+  <format>TABULAR</format>
+  <sourceIds class="linked-hash-set">
+    <string>tick</string>
+    <string>Banks</string>
+    <string>Loans</string>
+    <string>Loan Requests</string>
+  </sourceIds>
+  <fileName>IMM_Statistics.csv</fileName>
+  <addTimeStamp>true</addTimeStamp>
+</repast.simphony.data2.engine.FileSinkDescriptor>
