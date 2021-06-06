@@ -764,5 +764,74 @@ public class Bank extends EcoAgent {
 		return totalLoanCount;
 	}
 	
+	public double reportCash() {
+		
+		return cashAndCentralBankDeposit;
+	}
+	
+	public double reportSecurities() {
+		
+		return securities + blockedSecurities;
+	}
+	
+	public double reportClientCredit() {
+		
+		return clientCredits;
+	}
+	
+	public double reportCBFund() {
+		
+		return centralBankFunds;
+	}
+	
+	public double reportTermDeposit() {
+		
+		return clientTermDeposits;
+	}
+	
+	public double reportCurrentAccount() {
+		
+		return clientCurrentAccounts;
+	}
+	
+	public double reportInterbankLoan() {
+		
+		return interbankFunds;
+	}
+	
+	public double reportCashChange() {
+		
+		return cashAndCentralBankDeposit - lastCashAndCentralBankDeposit;
+	}
+	
+	public double reportSecuritiesChange() {
+		
+		return securities + blockedSecurities - (lastSecurities + lastBlockedSecurities);
+	}
+	
+	public double reportClientCreditChange() {
+		
+		return clientCredits - lastClientCredits;
+	}
+	
+	public double reportCBFundChange() {
+		
+		return centralBankFunds - lastCentralBankFunds;
+	}
+	
+	public double reportTermDepositChange() {
+		
+		return clientTermDeposits - lastClientTermDeposits;
+	}
+	
+	public double reportCurrentAccountChange() {
+		
+		return clientCurrentAccounts - lastClientCurrentAccounts;
+	}
+	
+	public double reportInterbankLoanChange() {
+		
+		return interbankFunds - lastInterbankFunds;
+	}
 }
 
