@@ -3,11 +3,15 @@
  */
 package net.sabet.simulation;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
@@ -162,8 +166,7 @@ public class Simulator implements ContextBuilder<Object> {
 						+listOfIndexes
 						+" was considered as the borrowing counterpart of bank "+b.title
 						+" (bank "+b.title+" borrows from this bank).");
-			}
-			else {
+			} else {
 				System.out.println("Banks "
 						+listOfIndexes.substring(0, start)+" and"+listOfIndexes.substring(start+",".length())
 						+" were considered as the borrowing counterparts of bank "+b.title
@@ -191,13 +194,11 @@ public class Simulator implements ContextBuilder<Object> {
 				size = 0;
 				totAssetsMean = smallBanksMean;
 				totAssetsStdDev = smallBanksStdDev;
-			}
-			else if (sizeFinder > 1 - largeBanksShare) {
+			} else if (sizeFinder > 1 - largeBanksShare) {
 				size = 2;
 				totAssetsMean = largeBanksMean;
 				totAssetsStdDev = largeBanksStdDev;
-			}
-			else {
+			} else {
 				size = 1;
 				totAssetsMean = mediumBanksMean;
 				totAssetsStdDev = mediumBanksStdDev;
@@ -260,14 +261,12 @@ public class Simulator implements ContextBuilder<Object> {
 							Loan loan = new Loan(l, b, fund, interestRate, duration);
 							l.lendingList.add(loan);
 							b.borrowingList.add(loan);
-						}
-						else {
+						} else {
 							l.interbankClaims -= (fund * debtCount);
 						}
 					}
 				}
-			}
-			else {
+			} else {
 				l.interbankClaims = 0.0;
 			}
 		}
@@ -341,6 +340,37 @@ public class Simulator implements ContextBuilder<Object> {
 
 		// Print the status:
 		System.out.println("\nThe central bank was initiated.\n");
+		System.out.println("Initiating blockchain nodes was started...");
+		
+		// Initiation: Start blockchain nodes.
+		/*try {
+			deployBlockchainNodes();
+		} catch (IOException e) {
+	        e.printStackTrace();
+	    }
+		
+		try {
+			runBlockchainNodes();
+		} catch (IOException e) {
+	        e.printStackTrace();
+	    }
+		
+		try {
+			TimeUnit.SECONDS.sleep(20);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		
+		for (Bank b : bankList) {
+			String server = "run" + b.title + "Server";
+			try {
+				runNodeServer(server);
+			} catch (IOException e) {
+		        e.printStackTrace();
+		    } catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}*/
 		
 		// Simulation: Simulate each tick.
 		RunEnvironment.getInstance().getCurrentSchedule().schedule(
@@ -362,17 +392,130 @@ public class Simulator implements ContextBuilder<Object> {
         return test;
 	}
 	
-	// This method makes a clearing vector for each bank based on the clearing matrix.
-	/*private double[] calculateClearingVector(double[][] paymentMatrix, int index) {
+	// This method deploys blockchain nodes.
+	private void deployBlockchainNodes() throws IOException {
 		
-		int bankCount = (int) paymentMatrix.length;
-		double[] clearingVector = new double[bankCount];
-		for (int k=0; k < bankCount; k++) {
-			clearingVector[k] = paymentMatrix[index][k];
+		Runtime rt = Runtime.getRuntime();
+		String[] commands = {"/bin/sh", "-c", "cd ~/IMM_BCT_MAS/ET\n./gradlew deployNodes"};
+		Process proc = rt.exec(commands);
+
+		BufferedReader stdInput = new BufferedReader(new 
+		     InputStreamReader(proc.getInputStream()));
+
+		BufferedReader stdError = new BufferedReader(new 
+		     InputStreamReader(proc.getErrorStream()));
+
+		// Read the output from the command
+		System.out.println("Here is the standard output of the command:\n");
+		String s = null;
+		while ((s = stdInput.readLine()) != null) {
+		    System.out.println(s);
 		}
-		return clearingVector;
-	}*/
+
+		// Read any errors from the attempted command
+		System.out.println("Here is the standard error of the command (if any):\n");
+		while ((s = stdError.readLine()) != null) {
+		    System.out.println(s);
+		}
+	}
 	
+	// This method runs blockchain nodes.
+	private void runBlockchainNodes() throws IOException {
+		
+		Runtime rt = Runtime.getRuntime();
+		String[] commands = {"/bin/sh", "-c", "cd ~/IMM_BCT_MAS/ET\n./build/nodes/runnodes --headless"};
+		Process proc = rt.exec(commands);
+
+		BufferedReader stdInput = new BufferedReader(new 
+		     InputStreamReader(proc.getInputStream()));
+
+		BufferedReader stdError = new BufferedReader(new 
+		     InputStreamReader(proc.getErrorStream()));
+
+		// Read the output from the command
+		System.out.println("Here is the standard output of the command:\n");
+		String s = null;
+		while ((s = stdInput.readLine()) != null) {
+		    System.out.println(s);
+		}
+
+		// Read any errors from the attempted command
+		System.out.println("Here is the standard error of the command (if any):\n");
+		while ((s = stdError.readLine()) != null) {
+		    System.out.println(s);
+		}
+	}
+	
+	// This method runs nodes' REST API servers.
+	private void runNodeServer(String server) throws IOException, InterruptedException {
+		
+        /*ProcessBuilder processBuilder = new ProcessBuilder();
+        String shellCommand = "cd ~/IMM_BCT_MAS/ET\n./gradlew " + server;
+        processBuilder.command("bash", "-c", shellCommand);
+        Process proc = processBuilder.start();*/
+        
+		Runtime rt = Runtime.getRuntime();
+		String[] commands = {"/bin/sh", "-c", "cd ~/IMM_BCT_MAS/ET\n./gradlew " + server};
+		Process proc = rt.exec(commands);
+
+		BufferedReader stdInput = new BufferedReader(new 
+		     InputStreamReader(proc.getInputStream()));
+		
+		BufferedReader stdError = new BufferedReader(new 
+		     InputStreamReader(proc.getErrorStream()));
+
+		// Read the output from the command
+		System.out.println("Here is the standard output of the command:\n");
+		String s = null;
+		while ((s = stdInput.readLine()) != null) {
+		    System.out.println(s);
+		}
+		
+		// Read any errors from the attempted command
+		System.out.println("Here is the standard error of the command (if any):\n");
+		while ((s = stdError.readLine()) != null) {
+		    System.out.println(s);
+		}
+
+		/*proc.waitFor();
+		proc.destroy();*/
+	}
+	
+	// This method runs Blockchain nodes.
+	private void runBlockchainNodes1() throws IOException, InterruptedException {
+		
+        ProcessBuilder processBuilder = new ProcessBuilder();
+        String shellCommand = "cd ~/IMM_BCT_MAS/ET\n" + "./gradlew deployNodes\n" + "./build/nodes/runnodes --headless\n";
+        for (Bank b : bankList) {
+        	String addToCommand = "./gradlew run" + b.title + "Server\n";
+        	shellCommand += addToCommand;
+        }
+        processBuilder.command("bash", "-c", shellCommand);
+        //int exitCode = 0;
+
+        //try {
+	        Process process = processBuilder.start();
+	        BufferedReader reader =
+	                new BufferedReader(new InputStreamReader(process.getInputStream()));
+
+			// Print the status:
+	        String line;
+	        while ((line = reader.readLine()) != null) {
+	            System.out.println(line);
+	        }
+	
+	        int exitCode = process.waitFor();
+	        //System.out.println("\nExited with error code : " + exitCode);
+	
+	    /*} catch (IOException e) {
+	        e.printStackTrace();
+	    } catch (InterruptedException e) {
+	        e.printStackTrace();
+	    }
+        
+        return exitCode;*/
+	}
+
 	//This method manages the work flow of simulations for all banks.
 	public void simulateTicks() {
 		
@@ -481,8 +624,7 @@ public class Simulator implements ContextBuilder<Object> {
 				
 				// Print the status:
 				System.out.println("	Loan is handled.");
-			}
-			else {
+			} else {
 				debtList.add(l); // Add the loan to the end of the queue.
 				
 				// Print the status:
@@ -621,8 +763,7 @@ public class Simulator implements ContextBuilder<Object> {
 					
 					// Print the status:
 					System.out.println("Bank "+b.title+" was failed.");
-				}
-				else {
+				} else {
 					b.raiseEquity();
 				}
 			}

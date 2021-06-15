@@ -66,8 +66,7 @@ public class CentralBank extends RegAgent {
 				double paymentsStdDeviation = Math.sqrt(paymentsRawSum / (b.paymentsList.size() - 1));
 				defaultRegistry.createNormal(paymentsMean, paymentsStdDeviation);
 				totalPayment = defaultRegistry.getNormal().nextDouble();
-			}
-			else {
+			} else {
 				double randompaymentChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
 				totalPayment = paymentsMean
 						* RandomHelper.nextDoubleFromTo(1 - randompaymentChange, 1 + randompaymentChange);
@@ -80,8 +79,7 @@ public class CentralBank extends RegAgent {
 			for (int j = 0; j < bankCount; j++) {
 				if (j==i) {
 					randomNumbers[j] = 0.0;
-				}
-				else {
+				} else {
 					randomNumbers[j] = RandomHelper.nextDoubleFromTo(0, 1);
 				}
 			}

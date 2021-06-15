@@ -3,7 +3,12 @@
  */
 package net.sabet.contracts;
 
-import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.net.URL;
+import java.net.URLConnection;
 
 import net.sabet.agents.Bank;
 import repast.simphony.engine.environment.RunEnvironment;
@@ -44,21 +49,48 @@ public class Loan {
 		}
 	}
 	
-	/*public void registerReverseTransactionInBlockchain (Loan loan) {
+	/*public boolean registerTransactionInBlockchain(Bank payer, Bank payee, double amount) {
 		
-		Bank debtor = loan.borrower;
-		Bank creditor = loan.lender;
-		double interest = loan.amount * (Math.pow(1 + loan.interestRate, loan.timer / 365) - 1);
-		double amount = loan.amount + interest;
-		repaid = registerTransactionInBlockchain(debtor, creditor, amount);
+		// Aimed at blockchain-free testing.
+		return true
 	}*/
 	
 	public boolean registerTransactionInBlockchain(Bank payer, Bank payee, double amount) {
 		
-		//call Corda web service
-		//if exception -> return false
-		//what about reference to the previous transaction (for reverses)?
-		return true;
+		// Call Corda API.
+		int payerPort = 14000 + payer.identity;
+		try {
+			URL url = new URL("http://localhost:" + payerPort
+					+ "/create-loan?loanValue=" + amount
+					+ "&partyName=O=" + payee.title
+					+ ",L=Paris,C=FR");
+	        String query = "";
+
+	        //make connection
+	        URLConnection urlc = url.openConnection();
+
+	        //use post mode
+	        urlc.setDoOutput(true);
+	        urlc.setAllowUserInteraction(false);
+
+	        //send query
+	        PrintStream ps = new PrintStream(urlc.getOutputStream());
+	        ps.print(query);
+	        ps.close();
+
+	        //get result
+	        BufferedReader br = new BufferedReader(new InputStreamReader(urlc
+	            .getInputStream()));
+	        String l = null;
+	        while ((l=br.readLine())!=null) {
+	            System.out.println(l);
+	        }
+	        br.close();
+			return true;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return false;
+		}
 	}
 	
 	public void loanTimer() {

@@ -1,8 +1,8 @@
 <repast.simphony.chart2.engine.TimeSeriesChartDescriptor simphonyVersion="2.8.0">
-  <name>Loan Ststistics</name>
+  <name>IMM accounts change</name>
   <dataSet>IMM Statistics</dataSet>
   <xAxisLabel>Tick Count</xAxisLabel>
-  <yAxisLabel>Loans</yAxisLabel>
+  <yAxisLabel>Change in amount</yAxisLabel>
   <chartTitle></chartTitle>
   <type>TIME_SERIES</type>
   <background>
@@ -21,25 +21,85 @@
   <showLegend>true</showLegend>
   <seriesIds>
     <entry>
-      <string>Loans</string>
+      <string>Changes in current accounts</string>
       <SeriesData>
-        <label>Loans</label>
+        <label>Changes in current accounts</label>
+        <color>
+          <red>145</red>
+          <green>145</green>
+          <blue>145</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Changes in interbank loans</string>
+      <SeriesData>
+        <label>Changes in interbank loans</label>
+        <color>
+          <red>69</red>
+          <green>69</green>
+          <blue>69</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Changes in securities</string>
+      <SeriesData>
+        <label>Changes in securities</label>
         <color>
           <red>255</red>
-          <green>0</green>
+          <green>129</green>
           <blue>0</blue>
           <alpha>255</alpha>
         </color>
       </SeriesData>
     </entry>
     <entry>
-      <string>Loan Requests</string>
+      <string>Changes in central bank loans</string>
       <SeriesData>
-        <label>Loan Requests</label>
+        <label>Changes in central bank loans</label>
         <color>
-          <red>0</red>
-          <green>5</green>
+          <red>198</red>
+          <green>198</green>
+          <blue>7</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Changes in term deposits</string>
+      <SeriesData>
+        <label>Changes in term deposits</label>
+        <color>
+          <red>191</red>
+          <green>42</green>
+          <blue>13</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Changes in cash</string>
+      <SeriesData>
+        <label>Changes in cash</label>
+        <color>
+          <red>255</red>
+          <green>0</green>
           <blue>255</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Changes in client loans</string>
+      <SeriesData>
+        <label>Changes in client loans</label>
+        <color>
+          <red>1</red>
+          <green>180</green>
+          <blue>180</blue>
           <alpha>255</alpha>
         </color>
       </SeriesData>

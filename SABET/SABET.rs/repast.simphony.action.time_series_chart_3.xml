@@ -1,8 +1,8 @@
 <repast.simphony.chart2.engine.TimeSeriesChartDescriptor simphonyVersion="2.8.0">
-  <name>Banks vs Ticks</name>
+  <name>IMM objects counts</name>
   <dataSet>IMM Statistics</dataSet>
   <xAxisLabel>Tick Count</xAxisLabel>
-  <yAxisLabel></yAxisLabel>
+  <yAxisLabel>Object Count</yAxisLabel>
   <chartTitle></chartTitle>
   <type>TIME_SERIES</type>
   <background>
@@ -20,6 +20,30 @@
   <showGrid>true</showGrid>
   <showLegend>true</showLegend>
   <seriesIds>
+    <entry>
+      <string>Loans</string>
+      <SeriesData>
+        <label>Loans</label>
+        <color>
+          <red>255</red>
+          <green>0</green>
+          <blue>0</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Loan requests</string>
+      <SeriesData>
+        <label>Loan requests</label>
+        <color>
+          <red>14</red>
+          <green>202</green>
+          <blue>14</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
     <entry>
       <string>Banks</string>
       <SeriesData>

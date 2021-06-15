@@ -119,6 +119,7 @@ public class Bank extends EcoAgent {
 	public double interbankFunds, lastInterbankFunds;
 	
 	public double liquidityExcessDeficit = 0.0;
+	public int identity;
 	public String title;
 	
 	/*public double depositMean, depositStdDev, creditMean, creditStdDev, paymentMean, paymentStdDev;*/
@@ -126,6 +127,7 @@ public class Bank extends EcoAgent {
 	public Bank() {
 		
 		super(Bank);
+		this.identity = super.identity;
 		this.title = super.title;
 	}
 	
@@ -152,8 +154,7 @@ public class Bank extends EcoAgent {
 			double depositsStdDeviation = Math.sqrt(depositsRawSum / (depositsList.size() - 1));
 			defaultRegistry.createNormal(depositsMean, depositsStdDeviation);
 			clientTermDeposits = defaultRegistry.getNormal().nextDouble();
-		}
-		else {
+		} else {
 			double randomDepositChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
 			clientTermDeposits = depositsMean
 					* RandomHelper.nextDoubleFromTo(1 - randomDepositChange, 1 + randomDepositChange);
@@ -198,8 +199,7 @@ public class Bank extends EcoAgent {
 			creditsStdDeviation = Math.sqrt(creditsRawSum / (creditsList.size() - 1));
 			defaultRegistry.createNormal(creditsMean, creditsStdDeviation);
 			normalCredits = defaultRegistry.getNormal().nextDouble();
-		}
-		else {
+		} else {
 			double randomCreditChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
 			normalCredits = creditsMean
 					* RandomHelper.nextDoubleFromTo(1 - randomCreditChange, 1 + randomCreditChange);
@@ -210,8 +210,7 @@ public class Bank extends EcoAgent {
 			counter++;
 			if (counter < Math.sqrt(lastClientCredits)) {
 				newCredits = Math.min(Math.min(loanBudget, leveragedLimit), normalCredits);
-			}
-			else {
+			} else {
 				newCredits = lastClientCredits;
 			}
 			difClientCredits = lastClientCredits - newCredits;
@@ -290,17 +289,14 @@ public class Bank extends EcoAgent {
 				
 				// Accounting
 				//cashAndCentralBankDeposit -= amount;
-			}
-			else {
+			} else {
 				defaultLoan(loan);
 				loan.repaid = false;
 				
 				// Print the status:
 				System.out.println("			Loan was defaulted due to blockchain uncommit.");
 			}
-		}
-		
-		// Repay by borrowing from the central bank against securities.
+		}// Repay by borrowing from the central bank against securities.
 		else if (cashAndCentralBankDeposit + securities >= amount) {
 			if (credit > 0.0 && loan.repeatRepay <= maxRepeat) {
 				
@@ -310,8 +306,7 @@ public class Bank extends EcoAgent {
 				
 				handled = false;
 				loan.repeatRepay++;
-			}
-			else {
+			} else {
 				
 				// Print the status:
 				System.out.println("	Borrower's securities: "+securities);
@@ -330,8 +325,7 @@ public class Bank extends EcoAgent {
 					
 					// Accounting
 					//cashAndCentralBankDeposit = 0.0;
-				}
-				else {
+				} else {
 					defaultLoan(loan);
 					loan.repaid = false;
 					
@@ -339,9 +333,7 @@ public class Bank extends EcoAgent {
 					System.out.println("			Loan was defaulted due to blockchain uncommit.");
 				}
 			}
-		}
-		
-		// Repay by assets' fire sale.
+		}// Repay by assets' fire sale.
 		else if (cashAndCentralBankDeposit + (securities + clientCredits) / (1 + lossPercent) >= amount) {
 			if (credit > 0.0 && loan.repeatRepay <= maxRepeat) {
 				
@@ -351,8 +343,7 @@ public class Bank extends EcoAgent {
 				
 				handled = false;
 				loan.repeatRepay++;
-			}
-			else {
+			} else {
 				
 				// Print the status:
 				System.out.println("	Borrower's securities: "+securities);
@@ -372,8 +363,7 @@ public class Bank extends EcoAgent {
 					
 					// Accounting
 					//cashAndCentralBankDeposit = 0.0;
-				}
-				else {
+				} else {
 					defaultLoan(loan);
 					loan.repaid = false;
 					
@@ -381,9 +371,7 @@ public class Bank extends EcoAgent {
 					System.out.println("			Loan was defaulted due to blockchain uncommit.");
 				}
 			}
-		}
-		
-		// Default.
+		}// Default.
 		else {
 			defaultLoan(loan);
 			loan.repaid = false;
@@ -624,8 +612,7 @@ public class Bank extends EcoAgent {
 				System.out.println("	Bank "+potentialLender.title
 						+" accepted the request of bank "+title
 						+". Loan amount = "+loan.amount);
-			}
-			else {
+			} else {
 				
 				// Print the status:
 				System.out.println("	Bank "+potentialLender.title
@@ -682,8 +669,7 @@ public class Bank extends EcoAgent {
 		if (c != null) {
 			if (!request.accepted) {
 				c.badHistory += 1;
-			}
-			else {
+			} else {
 				c.goodHistory += 1;
 			}
 		}
