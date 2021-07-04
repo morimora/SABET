@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import net.sabet.contracts.Loan;
+import net.sabet.enums.BankSize;
 import net.sabet.enums.CounterpartyType;
 import net.sabet.enums.EcoAgentType;
 import net.sabet.simulation.Simulator;
@@ -20,10 +21,6 @@ import repast.simphony.random.RandomHelper;
  * @author morteza
  *
  */
-/*enum CounterpartyType {
-	Lending,
-	Borrowing;
-}*/
 
 public class Bank extends EcoAgent {
 
@@ -105,24 +102,23 @@ public class Bank extends EcoAgent {
 	List<Double> paymentsList = new ArrayList<Double>(Arrays.asList(payments));
 
 	// Assets:
-	public double cashAndCentralBankDeposit, lastCashAndCentralBankDeposit;
-	public double blockedSecurities, lastBlockedSecurities;
-	public double securities, lastSecurities;
-	public double clientCredits, lastClientCredits;
-	public double interbankClaims, lastInterbankClaims;
+	public double cashAndCentralBankDeposit;
+	public double blockedSecurities;
+	public double securities;
+	public double clientCredits;
+	public double interbankClaims;
 	
 	// Liabilities:
-	public double equity, lastEquity;
-	public double centralBankFunds, lastCentralBankFunds;
-	public double clientTermDeposits, lastClientTermDeposits;
-	public double clientCurrentAccounts, lastClientCurrentAccounts;
-	public double interbankFunds, lastInterbankFunds;
+	public double equity;
+	public double centralBankFunds;
+	public double clientTermDeposits;
+	public double clientCurrentAccounts;
+	public double interbankFunds;
 	
 	public double liquidityExcessDeficit = 0.0;
 	public int identity;
 	public String title;
-	
-	/*public double depositMean, depositStdDev, creditMean, creditStdDev, paymentMean, paymentStdDev;*/
+	public BankSize size;
 	
 	public Bank() {
 		
@@ -132,11 +128,7 @@ public class Bank extends EcoAgent {
 	}
 	
 	// This method updates clients' term deposits using a Gaussian random algorithm.
-	public void updateClientTermDeposits() {
-		
-		/*DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
-		defaultRegistry.createNormal(depositMean, depositStdDev);
-		clientTermDeposits = defaultRegistry.getNormal().nextDouble();*/
+	public void updateClientTermDeposits(double lastClientTermDeposits) {
 		
 		if (depositsList.size() == 0) {
 			depositsList.add(lastClientTermDeposits);
@@ -170,14 +162,9 @@ public class Bank extends EcoAgent {
 	}
 	
 	// This method updates clients' credits using a Gaussian random algorithm.
-	public void updateClientCredits() {
+	public void updateClientCredits(double lastClientCredits) {
 		
 		int counter = 0;
-		/*DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
-		defaultRegistry.createNormal(creditMean, creditStdDev);
-		double normalCredits = defaultRegistry.getNormal().nextDouble();
-		double newCredits, difClientCredits, interest;*/
-		
 		double loanBudget = Math.max(lastClientCredits, equity / Simulator.capitalAdequacyRatio
 				- (Simulator.ccCoefficient * clientCredits + Simulator.icCoefficient * interbankClaims));
 		double leveragedLimit = equity / Simulator.leverageRatio -
@@ -226,16 +213,6 @@ public class Bank extends EcoAgent {
 		creditsList.add(clientCredits);
 	}
 	
-	// This method settles the bank's payments with other banks based on the clearing vector.
-	/*public void settlePayments(double[] clearingVector) {
-		
-		double totalPayments = Arrays.stream(clearingVector).sum();
-		
-		// Accounting
-		cashAndCentralBankDeposit -= totalPayments;
-		clientCurrentAccounts -= totalPayments;
-	}*/
-	
 	// This method settles the bank's payments with other banks based on the clearing matrix.
 	public void settlePayments(double[][] clearingMatrix) {
 		
@@ -278,7 +255,7 @@ public class Bank extends EcoAgent {
 			// Print the status:
 			System.out.println("		Loan was considered to be repaid by cash.");
 
-			// Send transaction to the Blockchain.
+			// Send transaction to blockchain.
 			loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
 			
 			// If the transaction is accepted, change values.
@@ -286,9 +263,6 @@ public class Bank extends EcoAgent {
 				
 				// Print the status:
 				System.out.println("			Loan was repaid by cash.");
-				
-				// Accounting
-				//cashAndCentralBankDeposit -= amount;
 			} else {
 				defaultLoan(loan);
 				loan.repaid = false;
@@ -312,7 +286,7 @@ public class Bank extends EcoAgent {
 				System.out.println("	Borrower's securities: "+securities);
 				System.out.println("		Loan was considered to be repaid by the CB refinance.");
 				
-				// Send transaction to the Blockchain.
+				// Send transaction to blockchain.
 				loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
 				
 				// If the transaction is accepted, change banks' balance sheet.
@@ -322,9 +296,6 @@ public class Bank extends EcoAgent {
 					
 					// Print the status:
 					System.out.println("			Loan was repaid by the CB refinance.");
-					
-					// Accounting
-					//cashAndCentralBankDeposit = 0.0;
 				} else {
 					defaultLoan(loan);
 					loan.repaid = false;
@@ -350,7 +321,7 @@ public class Bank extends EcoAgent {
 				System.out.println("	Borrower's client credits: "+clientCredits);
 				System.out.println("		Loan was considered to be repaid by firesale.");
 				
-				// Send transaction to the Blockchain.
+				// Send transaction to blockchain.
 				loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
 				
 				// If the transaction is accepted, change banks' balance sheet.
@@ -360,9 +331,6 @@ public class Bank extends EcoAgent {
 					
 					// Print the status:
 					System.out.println("			Loan was repaid by firesale.");
-					
-					// Accounting
-					//cashAndCentralBankDeposit = 0.0;
 				} else {
 					defaultLoan(loan);
 					loan.repaid = false;
@@ -407,12 +375,7 @@ public class Bank extends EcoAgent {
 	// This method supports all functions of the bank when it defaults.
 	public void defaultLoan(Loan loan) {
 	
-		//Bank lender = loan.lender;
 		loan.defaulted = true;
-		
-		// Accounting
-		//lender.interbankClaims -= loan.amount;
-		//lender.equity -= loan.amount;
 	}
 	
 	//This method evaluates borrowers from the bank (lending counterparts).
@@ -495,19 +458,19 @@ public class Bank extends EcoAgent {
 	}
 	
 	// This method calculates excess or deficit of the bank's liquidity.
-	public void calculateLiquidity () {
+	public void calculateLiquidity (double[] lastBalanceSheet) {
 		
-		double defAssets = lastCashAndCentralBankDeposit - cashAndCentralBankDeposit
-				+ lastBlockedSecurities - blockedSecurities
-				+ lastSecurities - securities
-				+ lastClientCredits - clientCredits
-				+ lastInterbankClaims - interbankClaims;
+		double defAssets = lastBalanceSheet[0] - cashAndCentralBankDeposit
+				+ lastBalanceSheet[1] - blockedSecurities
+				+ lastBalanceSheet[2] - securities
+				+ lastBalanceSheet[3] - clientCredits
+				+ lastBalanceSheet[4] - interbankClaims;
 		
-		double defLiabilities = lastEquity - equity
-				+ lastCentralBankFunds - centralBankFunds
-				+ lastClientTermDeposits - clientTermDeposits
-				+ lastClientCurrentAccounts - clientCurrentAccounts
-				+ lastInterbankFunds - interbankFunds;
+		double defLiabilities = lastBalanceSheet[5] - equity
+				+ lastBalanceSheet[6] - centralBankFunds
+				+ lastBalanceSheet[7] - clientTermDeposits
+				+ lastBalanceSheet[8] - clientCurrentAccounts
+				+ lastBalanceSheet[9] - interbankFunds;
 		
 		liquidityExcessDeficit = defAssets - defLiabilities;
 	}
@@ -527,14 +490,7 @@ public class Bank extends EcoAgent {
 				.sum();
 		
 		// Accounting
-		//cashAndCentralBankDeposit = minReserve;
 		liquidityExcessDeficit += (difference - debt);
-		
-		/*System.out.println("actual cash= "+this.cashAndCentralBankDeposit);
-		System.out.println("minReserve= "+minReserve);
-		System.out.println("difference= "+difference);
-		System.out.println("debt= "+debt);
-		System.out.println("excess_deficit= "+this.liquidityExcessDeficit);*/
 	}
 	
 	// This method supports all functions related to buying securities by the bank.
@@ -545,7 +501,6 @@ public class Bank extends EcoAgent {
 				+ securities
 				+ clientCredits
 				+ interbankClaims;
-				//+ liquidityExcessDeficit;
 		double securitiesLimit = totAssets * Simulator.securitiesShare;
 		if (blockedSecurities + securities < securitiesLimit) {
 			double newSecurities =
@@ -601,10 +556,6 @@ public class Bank extends EcoAgent {
 				liquidityExcessDeficit += loan.amount;
 				
 				if (debt != null) {
-					
-					// Accounting
-					//cashAndCentralBankDeposit += loan.amount;
-					
 					repayLoan(debt);
 				}
 				
@@ -689,20 +640,6 @@ public class Bank extends EcoAgent {
 		liquidityExcessDeficit -= amount;
 	}
 	
-	// This method adds the bank's liquidity excess to its reserve and zeros the excess.
-	/*public void zeroExcess() {
-		
-		// Accounting
-		cashAndCentralBankDeposit += liquidityExcessDeficit;
-		liquidityExcessDeficit = 0.0;
-	}*/
-	
-	/*public void makeUpByCapitalBuffer() {
-		
-		double legalReserve = (clientTermDeposits + clientCurrentAccounts) * Simulator.cashReserveRatio;
-		double capitalBuffer = equity * Simulator.capitalBuffer;
-	}*/
-	
 	// This method supports all functions that must be done when the bank goes bankrupt.
 	public void goBankrupt() {
 		
@@ -724,8 +661,6 @@ public class Bank extends EcoAgent {
 			borrower.interbankFunds -= l.amount;
 			borrower.equity += l.amount;
 		});
-		
-		//Simulator.context.remove(this);
 	}
 	
 	// This method raises the bank's equity.
@@ -783,41 +718,6 @@ public class Bank extends EcoAgent {
 	public double reportInterbankLoan() {
 		
 		return interbankFunds;
-	}
-	
-	public double reportCashChange() {
-		
-		return cashAndCentralBankDeposit - lastCashAndCentralBankDeposit;
-	}
-	
-	public double reportSecuritiesChange() {
-		
-		return securities + blockedSecurities - (lastSecurities + lastBlockedSecurities);
-	}
-	
-	public double reportClientCreditChange() {
-		
-		return clientCredits - lastClientCredits;
-	}
-	
-	public double reportCBFundChange() {
-		
-		return centralBankFunds - lastCentralBankFunds;
-	}
-	
-	public double reportTermDepositChange() {
-		
-		return clientTermDeposits - lastClientTermDeposits;
-	}
-	
-	public double reportCurrentAccountChange() {
-		
-		return clientCurrentAccounts - lastClientCurrentAccounts;
-	}
-	
-	public double reportInterbankLoanChange() {
-		
-		return interbankFunds - lastInterbankFunds;
 	}
 }
 

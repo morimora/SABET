@@ -22,7 +22,7 @@ public class CentralBank extends RegAgent {
 		bankReserveDeposits,
 		marketLiquidityNeed;
 	public double[][] clearingMatrix = null;
-	String title;
+	public String title;
 
 	public CentralBank() {
 		
@@ -45,10 +45,6 @@ public class CentralBank extends RegAgent {
 		for (int i = 0 ; i < bankCount; i++) {
 			Bank b = bankList.get(i);
 			double[] randomNumbers = new double[bankCount];
-			
-			/*DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
-			defaultRegistry.createNormal(b.paymentMean, b.paymentStdDev);
-			double totalPayment = defaultRegistry.getNormal().nextDouble();*/
 			
 			if (b.paymentsList.size() == 0) {
 				b.paymentsList.add(b.clientCurrentAccounts);
@@ -88,14 +84,6 @@ public class CentralBank extends RegAgent {
 				paymentMatrix[i][j] = randomNumbers[j] / sum * totalPayment;
 			}
 		}
-		
-		// Makes a clearing matrix for interbank payments.
-		/*for (int i = 0; i < bankCount; i++) {
-			for (int j = i + 1; j < bankCount; j++) {
-				paymentMatrix[i][j] -= paymentMatrix[j][i];
-				paymentMatrix[j][i] = -paymentMatrix[i][j];
-			}
-		}*/
 		
 		clearingMatrix = paymentMatrix;
 	}

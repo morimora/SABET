@@ -5,5 +5,4 @@
 <repast.simphony.dataLoader.engine.ClassNameDataLoaderAction context="SABET" file="repast.simphony.dataLoader.engine.ClassNameDataLoaderAction_2.xml" />
 <repast.simphony.action.time_series_chart context="SABET" file="repast.simphony.action.time_series_chart_3.xml" />
 <repast.simphony.action.time_series_chart context="SABET" file="repast.simphony.action.time_series_chart_4.xml" />
-<repast.simphony.action.time_series_chart context="SABET" file="repast.simphony.action.time_series_chart_5.xml" />
 </Scenario>

@@ -11,10 +11,6 @@ import net.sabet.enums.EcoAgentType;
  * @author morteza
  *
  */
-/*enum EcoAgentType {
-	Bank,
-	Firm
-}*/
 
 public class EcoAgent {
 	

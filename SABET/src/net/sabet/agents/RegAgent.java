@@ -11,10 +11,6 @@ import net.sabet.enums.RegAgentType;
  * @author morteza
  *
  */
-/*enum RegAgentType {
-	CentralBank,
-	Government
-}*/
 
 public class RegAgent {
 	

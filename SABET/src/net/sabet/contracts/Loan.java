@@ -49,12 +49,14 @@ public class Loan {
 		}
 	}
 	
+	// This method is for simulations without blockchain. 
 	/*public boolean registerTransactionInBlockchain(Bank payer, Bank payee, double amount) {
 		
 		// Aimed at blockchain-free testing.
-		return true
+		return true;
 	}*/
 	
+	// This method posts loan transactions to blockchain. 
 	public boolean registerTransactionInBlockchain(Bank payer, Bank payee, double amount) {
 		
 		// Call Corda API.
@@ -66,23 +68,23 @@ public class Loan {
 					+ ",L=Paris,C=FR");
 	        String query = "";
 
-	        //make connection
+	        // Make connection
 	        URLConnection urlc = url.openConnection();
 
-	        //use post mode
+	        // Use post mode
 	        urlc.setDoOutput(true);
 	        urlc.setAllowUserInteraction(false);
 
-	        //send query
+	        // Send query
 	        PrintStream ps = new PrintStream(urlc.getOutputStream());
 	        ps.print(query);
 	        ps.close();
 
-	        //get result
+	        // Get result
 	        BufferedReader br = new BufferedReader(new InputStreamReader(urlc
 	            .getInputStream()));
 	        String l = null;
-	        while ((l=br.readLine())!=null) {
+	        while ((l = br.readLine()) != null) {
 	            System.out.println(l);
 	        }
 	        br.close();

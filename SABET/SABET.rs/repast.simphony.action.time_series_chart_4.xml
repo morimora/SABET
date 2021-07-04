@@ -1,8 +1,8 @@
 <repast.simphony.chart2.engine.TimeSeriesChartDescriptor simphonyVersion="2.8.0">
-  <name>IMM accounts change</name>
+  <name>IMM accounts</name>
   <dataSet>IMM Statistics</dataSet>
   <xAxisLabel>Tick Count</xAxisLabel>
-  <yAxisLabel>Change in amount</yAxisLabel>
+  <yAxisLabel>Aamount</yAxisLabel>
   <chartTitle></chartTitle>
   <type>TIME_SERIES</type>
   <background>
@@ -21,9 +21,21 @@
   <showLegend>true</showLegend>
   <seriesIds>
     <entry>
-      <string>Changes in current accounts</string>
+      <string>Total central bank loans</string>
       <SeriesData>
-        <label>Changes in current accounts</label>
+        <label>Total central bank loans</label>
+        <color>
+          <red>198</red>
+          <green>198</green>
+          <blue>0</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Total current accounts</string>
+      <SeriesData>
+        <label>Total current accounts</label>
         <color>
           <red>145</red>
           <green>145</green>
@@ -33,9 +45,21 @@
       </SeriesData>
     </entry>
     <entry>
-      <string>Changes in interbank loans</string>
+      <string>Total term deposits</string>
       <SeriesData>
-        <label>Changes in interbank loans</label>
+        <label>Total term deposits</label>
+        <color>
+          <red>191</red>
+          <green>40</green>
+          <blue>13</blue>
+          <alpha>255</alpha>
+        </color>
+      </SeriesData>
+    </entry>
+    <entry>
+      <string>Total interbank loans</string>
+      <SeriesData>
+        <label>Total interbank loans</label>
         <color>
           <red>69</red>
           <green>69</green>
@@ -45,45 +69,21 @@
       </SeriesData>
     </entry>
     <entry>
-      <string>Changes in securities</string>
+      <string>Total securities</string>
       <SeriesData>
-        <label>Changes in securities</label>
+        <label>Total securities</label>
         <color>
           <red>255</red>
-          <green>129</green>
+          <green>128</green>
           <blue>0</blue>
           <alpha>255</alpha>
         </color>
       </SeriesData>
     </entry>
     <entry>
-      <string>Changes in central bank loans</string>
+      <string>Total cash &amp; reserve</string>
       <SeriesData>
-        <label>Changes in central bank loans</label>
-        <color>
-          <red>198</red>
-          <green>198</green>
-          <blue>7</blue>
-          <alpha>255</alpha>
-        </color>
-      </SeriesData>
-    </entry>
-    <entry>
-      <string>Changes in term deposits</string>
-      <SeriesData>
-        <label>Changes in term deposits</label>
-        <color>
-          <red>191</red>
-          <green>42</green>
-          <blue>13</blue>
-          <alpha>255</alpha>
-        </color>
-      </SeriesData>
-    </entry>
-    <entry>
-      <string>Changes in cash</string>
-      <SeriesData>
-        <label>Changes in cash</label>
+        <label>Total cash &amp; reserve</label>
         <color>
           <red>255</red>
           <green>0</green>
@@ -93,9 +93,9 @@
       </SeriesData>
     </entry>
     <entry>
-      <string>Changes in client loans</string>
+      <string>Total client loans</string>
       <SeriesData>
-        <label>Changes in client loans</label>
+        <label>Total client loans</label>
         <color>
           <red>1</red>
           <green>180</green>
