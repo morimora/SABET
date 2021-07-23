@@ -47,7 +47,7 @@ public class CentralBank extends RegAgent {
 			double[] randomNumbers = new double[bankCount];
 			
 			if (b.paymentsList.size() == 0) {
-				b.paymentsList.add(b.clientCurrentAccounts);
+				b.paymentsList.add(b.clientDemandDeposits);
 			}
 			double paymentsMean = b.paymentsList.stream()
 					.mapToDouble(Double::doubleValue)
@@ -67,8 +67,8 @@ public class CentralBank extends RegAgent {
 				totalPayment = paymentsMean
 						* RandomHelper.nextDoubleFromTo(1 - randompaymentChange, 1 + randompaymentChange);
 			}
-			if (totalPayment > b.clientCurrentAccounts || totalPayment < 0) {
-				totalPayment = RandomHelper.nextDoubleFromTo(0, b.clientCurrentAccounts);
+			if (totalPayment > b.clientDemandDeposits || totalPayment < 0) {
+				totalPayment = RandomHelper.nextDoubleFromTo(0, b.clientDemandDeposits);
 			}
 			b.paymentsList.add(totalPayment);
 			

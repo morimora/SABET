@@ -41,6 +41,13 @@ public class Simulator implements ContextBuilder<Object> {
 	int counterpartyMax = 3;
 	public static double capitalAdequacyRatio = 0.08;
 	public static double leverageRatio = 0.03;
+	public static double liquidityCoverageRatio = 1.0;
+	public static double rrDeposits = 0.1;
+	public static double rrCBFunds = 0.25;
+	public static double rrDifInterbank = 1.0;
+	public static double drCredits = 0.5;
+	public static double drCash = 0.0;
+	public static double drSecurities = 0.2;
 	public static double capitalBuffer = 0.025;
 	public static double ccCoefficient = 1.0;
 	public static double icCoefficient = 0.2;
@@ -88,6 +95,13 @@ public class Simulator implements ContextBuilder<Object> {
 		bankCount = (Integer) params.getValue("bank_count");
 		counterpartyMax = (Integer) params.getValue("counterparties_maximum");
 		capitalAdequacyRatio = (Double) params.getValue("capital_adequacy_ratio");
+		liquidityCoverageRatio = (Double) params.getValue("liquidity_coverage_ratio");
+		rrDeposits = (Double) params.getValue("runoff_rate_of_deposits");
+		rrCBFunds = (Double) params.getValue("runoff_rate_of_cb_funds");
+		rrDifInterbank = (Double) params.getValue("runoff_rate_of_interbank_loans");
+		drCredits = (Double) params.getValue("default_rate_of_client_credits");
+		drCash = (Double) params.getValue("default_rate_of_cash");
+		drSecurities = (Double) params.getValue("default_rate_of_securities");
 		leverageRatio = (Double) params.getValue("leverage_ratio");
 		capitalBuffer = (Double) params.getValue("capital_buffer_coefficient");
 		ccCoefficient = (Double) params.getValue("client_credits_risk_weight");
@@ -234,14 +248,14 @@ public class Simulator implements ContextBuilder<Object> {
 			double totAssets = defaultRegistry.getNormal().nextDouble();
 			
 			b.cashAndCentralBankDeposit = totAssets * balanceSheetShare[size][0];
-			b.blockedSecurities = totAssets * balanceSheetShare[size][1];
+			b.pledgedSecurities = totAssets * balanceSheetShare[size][1];
 			b.securities = totAssets * balanceSheetShare[size][2];
 			b.clientCredits = totAssets * balanceSheetShare[size][3];
 			b.interbankClaims = totAssets * RandomHelper.nextDoubleFromTo(0, balanceSheetShare[size][4]);
 			b.equity = totAssets * balanceSheetShare[size][5];
 			b.centralBankFunds = totAssets * balanceSheetShare[size][6];
 			b.clientTermDeposits = totAssets * balanceSheetShare[size][7];
-			b.clientCurrentAccounts = totAssets * balanceSheetShare[size][8];
+			b.clientDemandDeposits = totAssets * balanceSheetShare[size][8];
 			b.interbankFunds = 0.0;
 			
 			// Print the status:
@@ -318,7 +332,7 @@ public class Simulator implements ContextBuilder<Object> {
 			b.calculateLiquidity(lastBS);
 			b.cashAndCentralBankDeposit += b.liquidityExcessDeficit;
 			b.liquidityExcessDeficit = 0.0;
-			double minReserve = (b.clientTermDeposits + b.clientCurrentAccounts) * cashReserveRatio
+			double minReserve = (b.clientTermDeposits + b.clientDemandDeposits) * cashReserveRatio
 					+ b.equity * capitalBuffer;
 			if (b.cashAndCentralBankDeposit < minReserve) {
 				b.equity += (minReserve - b.cashAndCentralBankDeposit);
@@ -331,19 +345,19 @@ public class Simulator implements ContextBuilder<Object> {
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("Rsrv: "+b.cashAndCentralBankDeposit, 30, " ")
 					+" | "+StringUtils.rightPad(b.equity+"  :Eqt", 30, " "));
-			System.out.println(StringUtils.leftPad("BScrt: "+b.blockedSecurities, 30, " ")
+			System.out.println(StringUtils.leftPad("BScrt: "+b.pledgedSecurities, 30, " ")
 					+" | "+StringUtils.rightPad(b.centralBankFunds+" :CBFnd", 30, " "));
 			System.out.println(StringUtils.leftPad("Scrt: "+b.securities, 30, " ")
 					+" | "+StringUtils.rightPad(b.clientTermDeposits+" :CTDpst", 30, " "));
 			System.out.println(StringUtils.leftPad("CCrdt: "+b.clientCredits, 30, " ")
-					+" | "+StringUtils.rightPad(b.clientCurrentAccounts+" :CCAcnt", 30, " "));
+					+" | "+StringUtils.rightPad(b.clientDemandDeposits+" :CCAcnt", 30, " "));
 			System.out.println(StringUtils.leftPad("IBClm: "+b.interbankClaims, 30, " ")
 					+" | "+StringUtils.rightPad(b.interbankFunds+" :IBFnd", 30, " "));
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("t-Ast: "+(b.cashAndCentralBankDeposit
-					+b.blockedSecurities+b.securities+b.clientCredits+b.interbankClaims), 30, " ")
+					+b.pledgedSecurities+b.securities+b.clientCredits+b.interbankClaims), 30, " ")
 					+" | "+StringUtils.rightPad((b.equity+b.centralBankFunds+b.clientTermDeposits
-					+b.clientCurrentAccounts+b.interbankFunds)+" :t-Lbl", 30, " "));
+					+b.clientDemandDeposits+b.interbankFunds)+" :t-Lbl", 30, " "));
 		}
 		
 		// Simulation: Simulate each tick.
@@ -469,14 +483,14 @@ public class Simulator implements ContextBuilder<Object> {
 			bankList.add(b);
 			int idx = bankList.indexOf(b);
 			lastBalanceSheet[idx][0] = b.cashAndCentralBankDeposit;
-			lastBalanceSheet[idx][1] = b.blockedSecurities;
+			lastBalanceSheet[idx][1] = b.pledgedSecurities;
 			lastBalanceSheet[idx][2] = b.securities;
 			lastBalanceSheet[idx][3] = b.clientCredits;
 			lastBalanceSheet[idx][4] = b.interbankClaims;
 			lastBalanceSheet[idx][5] = b.equity;
 			lastBalanceSheet[idx][6] = b.centralBankFunds;
 			lastBalanceSheet[idx][7] = b.clientTermDeposits;
-			lastBalanceSheet[idx][8] = b.clientCurrentAccounts;
+			lastBalanceSheet[idx][8] = b.clientDemandDeposits;
 			lastBalanceSheet[idx][9] = b.interbankFunds;
 			
 			b.liquidityExcessDeficit = 0.0;
@@ -582,6 +596,7 @@ public class Simulator implements ContextBuilder<Object> {
 				lastBS[i] = lastBalanceSheet[idx][i];
 			}
 			b.calculateLiquidity(lastBS);
+			b.lcrBasedSurplus = b.complyLCR(lastBS);
 		}
 		
 		// Print the status:
@@ -608,7 +623,7 @@ public class Simulator implements ContextBuilder<Object> {
 			// Print the status:
 			int idx = bankList.indexOf(b);
 			System.out.println("Securities invested (+) or firesaled (-) by bank "
-					+b.title+": "+(b.securities-lastBalanceSheet[idx][2]+b.blockedSecurities-lastBalanceSheet[idx][1]));
+					+b.title+": "+(b.securities-lastBalanceSheet[idx][2]+b.pledgedSecurities-lastBalanceSheet[idx][1]));
 		}
 		
 		// Print the status:
@@ -705,19 +720,19 @@ public class Simulator implements ContextBuilder<Object> {
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("Rsrv: "+b.cashAndCentralBankDeposit, 30, " ")
 					+" | "+StringUtils.rightPad(b.equity+"  :Eqt", 30, " "));
-			System.out.println(StringUtils.leftPad("BScrt: "+b.blockedSecurities, 30, " ")
+			System.out.println(StringUtils.leftPad("BScrt: "+b.pledgedSecurities, 30, " ")
 					+" | "+StringUtils.rightPad(b.centralBankFunds+" :CBFnd", 30, " "));
 			System.out.println(StringUtils.leftPad("Scrt: "+b.securities, 30, " ")
 					+" | "+StringUtils.rightPad(b.clientTermDeposits+" :CTDpst", 30, " "));
 			System.out.println(StringUtils.leftPad("CCrdt: "+b.clientCredits, 30, " ")
-					+" | "+StringUtils.rightPad(b.clientCurrentAccounts+" :CCAcnt", 30, " "));
+					+" | "+StringUtils.rightPad(b.clientDemandDeposits+" :CCAcnt", 30, " "));
 			System.out.println(StringUtils.leftPad("IBClm: "+b.interbankClaims, 30, " ")
 					+" | "+StringUtils.rightPad(b.interbankFunds+" :IBFnd", 30, " "));
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("t-Ast: "+(b.cashAndCentralBankDeposit
-					+b.blockedSecurities+b.securities+b.clientCredits+b.interbankClaims), 30, " ")
+					+b.pledgedSecurities+b.securities+b.clientCredits+b.interbankClaims), 30, " ")
 					+" | "+StringUtils.rightPad((b.equity+b.centralBankFunds+b.clientTermDeposits
-					+b.clientCurrentAccounts+b.interbankFunds)+" :t-Lbl", 30, " "));
+					+b.clientDemandDeposits+b.interbankFunds)+" :t-Lbl", 30, " "));
 		}
 	}
 }

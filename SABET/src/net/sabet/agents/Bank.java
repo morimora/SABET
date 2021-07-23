@@ -103,7 +103,7 @@ public class Bank extends EcoAgent {
 
 	// Assets:
 	public double cashAndCentralBankDeposit;
-	public double blockedSecurities;
+	public double pledgedSecurities;
 	public double securities;
 	public double clientCredits;
 	public double interbankClaims;
@@ -112,10 +112,11 @@ public class Bank extends EcoAgent {
 	public double equity;
 	public double centralBankFunds;
 	public double clientTermDeposits;
-	public double clientCurrentAccounts;
+	public double clientDemandDeposits;
 	public double interbankFunds;
 	
 	public double liquidityExcessDeficit = 0.0;
+	public double lcrBasedSurplus = 0.0;
 	public int identity;
 	public String title;
 	public BankSize size;
@@ -125,6 +126,59 @@ public class Bank extends EcoAgent {
 		super(Bank);
 		this.identity = super.identity;
 		this.title = super.title;
+	}
+	
+	// This method calculates the loan budget based on the capital adequacy ratio.
+	public double complyCAR () {
+		double loanBudget = equity / Simulator.capitalAdequacyRatio
+				- (Simulator.ccCoefficient * clientCredits + Simulator.icCoefficient * interbankClaims);
+		return loanBudget;
+	}
+	
+	// This method uses the leverage ratio to calculate the leverage limit.
+	public double complyLeverage() {
+		double leveragedLimit = equity / Simulator.leverageRatio -
+				(cashAndCentralBankDeposit + securities + interbankClaims);
+		return leveragedLimit;
+	}
+	
+	// This method calculates the loan budget based on the capital adequacy ratio.
+	public double complyLCR(double[] lastBalanceSheet) {
+		
+		// Calculate high-quality liquid assets:
+		double hqla=  cashAndCentralBankDeposit + securities +
+				Math.min(0.85 * interbankClaims, 2 / 3 * (cashAndCentralBankDeposit + securities));
+		
+		// Calculate net cash out-flows:
+		double currentContractualCashOutflow = centralBankFunds - lastBalanceSheet[6]
+				+ clientTermDeposits - lastBalanceSheet[7]
+				+ clientDemandDeposits - lastBalanceSheet[8]
+				+ interbankFunds - lastBalanceSheet[9];
+		double currentContractualCashInflow = securities - lastBalanceSheet[2]
+				+ clientCredits - lastBalanceSheet[3]
+				+ interbankClaims - lastBalanceSheet[4];
+		double expectedCashOutflow = currentContractualCashOutflow
+				+ Simulator.rrDeposits * (clientTermDeposits + clientDemandDeposits)
+				+ Simulator.rrCBFunds * centralBankFunds
+				+ Simulator.rrDifInterbank * (interbankFunds - interbankClaims);
+		double expectedCashInflow = currentContractualCashInflow
+				- Simulator.drCredits * clientCredits
+				- Simulator.drCash * cashAndCentralBankDeposit
+				- Simulator.drSecurities * securities;
+		double ncof = expectedCashOutflow - Math.min(expectedCashInflow, 0.75 * expectedCashOutflow);
+		
+		double liquiditySurplus = 0;
+		double lcr = 0;
+		if (ncof != 0) {
+			lcr = hqla / ncof;
+		}
+		if (lcr < Simulator.liquidityCoverageRatio) {
+			liquiditySurplus = hqla - Simulator.liquidityCoverageRatio * ncof;
+		}
+		if (lcr > Simulator.liquidityCoverageRatio) {
+			liquiditySurplus = hqla / Simulator.liquidityCoverageRatio - ncof;
+		}
+		return liquiditySurplus;
 	}
 	
 	// This method updates clients' term deposits using a Gaussian random algorithm.
@@ -165,10 +219,8 @@ public class Bank extends EcoAgent {
 	public void updateClientCredits(double lastClientCredits) {
 		
 		int counter = 0;
-		double loanBudget = Math.max(lastClientCredits, equity / Simulator.capitalAdequacyRatio
-				- (Simulator.ccCoefficient * clientCredits + Simulator.icCoefficient * interbankClaims));
-		double leveragedLimit = equity / Simulator.leverageRatio -
-				(cashAndCentralBankDeposit + securities + interbankClaims);
+		double loanBudget = Math.max(lastClientCredits, complyCAR());
+		double leveragedLimit = complyLeverage();
 		if (creditsList.size() == 0) {
 			creditsList.add(lastClientCredits);
 		}
@@ -203,10 +255,10 @@ public class Bank extends EcoAgent {
 			difClientCredits = lastClientCredits - newCredits;
 			interest = Math.max(0, difClientCredits * interestRate);
 		}
-		while (clientCurrentAccounts < difClientCredits + interest || newCredits < 0);
+		while (clientDemandDeposits < difClientCredits + interest || newCredits < 0);
 		
 		// Accounting:
-		clientCurrentAccounts -= (difClientCredits + interest);
+		clientDemandDeposits -= (difClientCredits + interest);
 		equity += interest;
 		clientCredits = newCredits;
 		
@@ -224,7 +276,7 @@ public class Bank extends EcoAgent {
 		
 		// Accounting
 		cashAndCentralBankDeposit -= totalPayments;
-		clientCurrentAccounts -= totalPayments;
+		clientDemandDeposits -= totalPayments;
 	}
 	
 	// This method repays the bank's loans that should be repaid in each tick.
@@ -422,7 +474,7 @@ public class Bank extends EcoAgent {
 		// Accounting
 		cashAndCentralBankDeposit += cbFund;
 		securities -= cbFund;
-		blockedSecurities += cbFund;
+		pledgedSecurities += cbFund;
 		centralBankFunds += cbFund;
 		
 		//liquidityExcessDeficit += need;
@@ -461,7 +513,7 @@ public class Bank extends EcoAgent {
 	public void calculateLiquidity (double[] lastBalanceSheet) {
 		
 		double defAssets = lastBalanceSheet[0] - cashAndCentralBankDeposit
-				+ lastBalanceSheet[1] - blockedSecurities
+				+ lastBalanceSheet[1] - pledgedSecurities
 				+ lastBalanceSheet[2] - securities
 				+ lastBalanceSheet[3] - clientCredits
 				+ lastBalanceSheet[4] - interbankClaims;
@@ -469,7 +521,7 @@ public class Bank extends EcoAgent {
 		double defLiabilities = lastBalanceSheet[5] - equity
 				+ lastBalanceSheet[6] - centralBankFunds
 				+ lastBalanceSheet[7] - clientTermDeposits
-				+ lastBalanceSheet[8] - clientCurrentAccounts
+				+ lastBalanceSheet[8] - clientDemandDeposits
 				+ lastBalanceSheet[9] - interbankFunds;
 		
 		liquidityExcessDeficit = defAssets - defLiabilities;
@@ -478,8 +530,9 @@ public class Bank extends EcoAgent {
 	// This methods provisions the bank's reserve requirement.
 	public void provisionReserve() {
 		
-		double minReserve = (clientTermDeposits + clientCurrentAccounts) * Simulator.cashReserveRatio
-				+ equity * Simulator.capitalBuffer;
+		double minReserve = (clientTermDeposits + clientDemandDeposits) * Simulator.cashReserveRatio
+				+ equity * Simulator.capitalBuffer
+				- Math.min(0, lcrBasedSurplus);
 		double difference = cashAndCentralBankDeposit - minReserve;
 		borrowingList.stream()
 				.filter(x -> x.defaulted)
@@ -497,15 +550,15 @@ public class Bank extends EcoAgent {
 	public void buySecurities() {
 		
 		double totAssets = cashAndCentralBankDeposit
-				+ blockedSecurities
+				+ pledgedSecurities
 				+ securities
 				+ clientCredits
 				+ interbankClaims;
 		double securitiesLimit = totAssets * Simulator.securitiesShare;
-		if (blockedSecurities + securities < securitiesLimit) {
+		if (pledgedSecurities + securities < securitiesLimit) {
 			double newSecurities =
 					RandomHelper.nextDoubleFromTo(0,
-							Math.min(liquidityExcessDeficit, securitiesLimit - (blockedSecurities + securities)));
+							Math.min(liquidityExcessDeficit, securitiesLimit - (pledgedSecurities + securities)));
 			
 			// Accounting
 			securities += newSecurities;
@@ -577,12 +630,13 @@ public class Bank extends EcoAgent {
 	public Loan respondLoanRequest(Bank requestor, LoanRequest request, Loan credit) {
 		
 		Loan loan = null;
-		double loanBudget = equity / Simulator.capitalAdequacyRatio
-				- (Simulator.ccCoefficient * clientCredits + Simulator.icCoefficient * interbankClaims);
-		double leveragedLimit = equity / Simulator.leverageRatio -
-				(cashAndCentralBankDeposit + securities + interbankClaims);
-		if(liquidityExcessDeficit > 0 && loanBudget > 0 && leveragedLimit > 0) {
-			double loanLimit = Math.min(liquidityExcessDeficit, Math.min(loanBudget, leveragedLimit));
+		double loanBudget = complyCAR();
+		double leveragedLimit = complyLeverage();
+		double liquiditySurplus = Math.max(0, lcrBasedSurplus);
+		if(liquidityExcessDeficit > 0 && loanBudget > 0 && leveragedLimit > 0 && liquiditySurplus > 0) {
+			double loanLimit = Math.min(
+					Math.min(liquidityExcessDeficit,liquiditySurplus),
+					Math.min(loanBudget, leveragedLimit));
 			double amount = Math.min(request.amount, loanLimit);
 			double interestRate = RandomHelper.nextDoubleFromTo(Simulator.corridorDown, Simulator.corridorUp);
 			Counterparty c = counterpartyList.stream()
@@ -634,7 +688,7 @@ public class Bank extends EcoAgent {
 		// Accounting
 		cashAndCentralBankDeposit -= amount;
 		centralBankFunds -= amount;
-		blockedSecurities -= amount;
+		pledgedSecurities -= amount;
 		securities += amount;
 		
 		liquidityExcessDeficit -= amount;
@@ -692,7 +746,7 @@ public class Bank extends EcoAgent {
 	
 	public double reportSecurities() {
 		
-		return securities + blockedSecurities;
+		return securities + pledgedSecurities;
 	}
 	
 	public double reportClientCredit() {
@@ -712,7 +766,7 @@ public class Bank extends EcoAgent {
 	
 	public double reportCurrentAccount() {
 		
-		return clientCurrentAccounts;
+		return clientDemandDeposits;
 	}
 	
 	public double reportInterbankLoan() {
