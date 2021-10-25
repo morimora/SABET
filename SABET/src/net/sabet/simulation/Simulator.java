@@ -71,12 +71,23 @@ public class Simulator implements ContextBuilder<Object> {
 	double largeBanksShare = 0.60;
 	double largeBanksMean = 35670.742;
 	
-	// Balance sheet coefficients for small banks:
+	public static boolean blockchainON = false;
+	public static int economicGrowthScenario = 0;
+
+	// Balance sheet coefficients for banks:
 	double[][] balanceSheetShare = {
 			//	Rsrv,	BScrt,	Scrt,	CCrdt,	IBClm,	Eqt,	CBFnd,	CTDpst,	CCAcnt, IBFnd
 			{	0.10,	0.0,	0.20,	0.65,	0.05,	0.15,	0.0,	0.40,	0.40,	0.05	},	// Small banks
 			{	0.05,	0.0,	0.15,	0.70,	0.10,	0.10,	0.0,	0.40,	0.40,	0.10	},	// Medium banks
 			{	0.05,	0.0,	0.10,	0.60,	0.25,	0.05,	0.0,	0.35,	0.35,	0.25	}	// Large banks
+		};
+	
+	// Drifts for different economic cycles:
+	double[][] uncertaintyDrift = {
+			//	GrwthL,	GrwthH,	DclnL,	DclnH,	RcssnL,	RcssnH
+			{	0.0,	0.005,	0.05,	0.10,	0.10,	0.25	},	// Credits
+			{	0.0,	0.003,	0.03,	0.06,	0.06,	0.15	},	// Term deposits
+			{	0.0,	0.003,	0.03,	0.06,	0.06,	0.15	}	// Payments
 		};
 	
 	public static ArrayList<Bank> bankList = new ArrayList<>();
@@ -122,6 +133,8 @@ public class Simulator implements ContextBuilder<Object> {
 		mediumBanksMean = (Double) params.getValue("mean_of_medium_banks_assets");
 		largeBanksShare = (Double) params.getValue("large_banks_share");
 		largeBanksMean = (Double) params.getValue("mean_of_large_banks_assets");
+		blockchainON = (Boolean) params.getValue("blockchain_ON");
+		economicGrowthScenario = (Integer) params.getValue("economic_growth_scenario");
 		
 		// Print the status:
 		System.out.println("The results of the initiation step:");
@@ -146,38 +159,43 @@ public class Simulator implements ContextBuilder<Object> {
 
 		// Print the status:
 		System.out.println("The central bank "+centralBank.title+" was initiated.");
-		System.out.println("Initiating blockchain nodes was started...");
 		
-		// Initiation: Start blockchain nodes.
-		try {
-			deployBlockchainNodes();
-		} catch (IOException e) {
-	        e.printStackTrace();
-	    }
-		
-		try {
-			runBlockchainNodes();
-		} catch (IOException e) {
-	        e.printStackTrace();
-	    }
-		
-		try {
-			TimeUnit.SECONDS.sleep(bankCount * 8);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-		
-		for (Bank b : bankList) {
-			String server = "run" + b.title + "Server";
-			try {
-				runNodeServer(server);
-				TimeUnit.SECONDS.sleep(8);
-				System.out.println("	API server "+server+" was run.");
+		if (blockchainON == true) {
+			
+			// Print the status:
+			System.out.println("Initiating blockchain nodes was started...");
+			
+			// Initiation: Start blockchain nodes.
+			/*try {
+				deployBlockchainNodes();
 			} catch (IOException e) {
 		        e.printStackTrace();
-		    } catch (InterruptedException e) {
+		    }
+			
+			try {
+				runBlockchainNodes();
+			} catch (IOException e) {
+		        e.printStackTrace();
+		    }
+			
+			try {
+				TimeUnit.SECONDS.sleep(bankCount * 8);
+			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			
+			for (Bank b : bankList) {
+				String server = "run" + b.title + "Server";
+				try {
+					runNodeServer(server);
+					TimeUnit.SECONDS.sleep(8);
+					System.out.println("	API server "+server+" was run.");
+				} catch (IOException e) {
+			        e.printStackTrace();
+			    } catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}*/
 		}
 		
 		// Initiation: Create random counterparts for banks and Assign their initial assets and liabilities.

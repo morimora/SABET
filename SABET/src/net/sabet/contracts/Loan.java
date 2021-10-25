@@ -11,6 +11,7 @@ import java.net.URL;
 import java.net.URLConnection;
 
 import net.sabet.agents.Bank;
+import net.sabet.simulation.Simulator;
 import repast.simphony.engine.environment.RunEnvironment;
 
 /**
@@ -49,49 +50,49 @@ public class Loan {
 		}
 	}
 	
-	// This method is for simulations without blockchain. 
-	/*public boolean registerTransactionInBlockchain(Bank payer, Bank payee, double amount) {
-		
-		// Aimed at blockchain-free testing.
-		return true;
-	}*/
-	
 	// This method posts loan transactions to blockchain. 
 	public boolean registerTransactionInBlockchain(Bank payer, Bank payee, double amount) {
 		
-		// Call Corda API.
-		int payerPort = 14000 + payer.identity;
-		try {
-			URL url = new URL("http://localhost:" + payerPort
-					+ "/create-loan?loanValue=" + amount
-					+ "&partyName=O=" + payee.title
-					+ ",L=Paris,C=FR");
-	        String query = "";
+		if (Simulator.blockchainON == true) {
+			
+			// Call Corda API.
+			int payerPort = 14000 + payer.identity;
+			try {
+				URL url = new URL("http://localhost:" + payerPort
+						+ "/create-loan?loanValue=" + amount
+						+ "&partyName=O=" + payee.title
+						+ ",L=Paris,C=FR");
+		        String query = "";
 
-	        // Make connection
-	        URLConnection urlc = url.openConnection();
+		        // Make connection.
+		        URLConnection urlc = url.openConnection();
 
-	        // Use post mode
-	        urlc.setDoOutput(true);
-	        urlc.setAllowUserInteraction(false);
+		        // Use post mode.
+		        urlc.setDoOutput(true);
+		        urlc.setAllowUserInteraction(false);
 
-	        // Send query
-	        PrintStream ps = new PrintStream(urlc.getOutputStream());
-	        ps.print(query);
-	        ps.close();
+		        // Send query.
+		        PrintStream ps = new PrintStream(urlc.getOutputStream());
+		        ps.print(query);
+		        ps.close();
 
-	        // Get result
-	        BufferedReader br = new BufferedReader(new InputStreamReader(urlc
-	            .getInputStream()));
-	        String l = null;
-	        while ((l = br.readLine()) != null) {
-	            System.out.println(l);
-	        }
-	        br.close();
+		        // Get result.
+		        BufferedReader br = new BufferedReader(new InputStreamReader(urlc
+		            .getInputStream()));
+		        String l = null;
+		        while ((l = br.readLine()) != null) {
+		            System.out.println(l);
+		        }
+		        br.close();
+				return true;
+			} catch (IOException e) {
+				e.printStackTrace();
+				return false;
+			}
+		} else {
+			
+			// Aimed at blockchain-free testing.
 			return true;
-		} catch (IOException e) {
-			e.printStackTrace();
-			return false;
 		}
 	}
 	

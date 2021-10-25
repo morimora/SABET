@@ -121,6 +121,9 @@ public class Bank extends EcoAgent {
 	public String title;
 	public BankSize size;
 	
+	public double uncertaintyDown;
+	public double uncertaintyUp;
+	
 	public Bank() {
 		
 		super(Bank);
@@ -142,7 +145,7 @@ public class Bank extends EcoAgent {
 		return leveragedLimit;
 	}
 	
-	// This method calculates the loan budget based on the capital adequacy ratio.
+	// This method calculates the loan budget based on the liquidity coverage ratio.
 	public double complyLCR(double[] lastBalanceSheet) {
 		
 		// Calculate high-quality liquid assets:
