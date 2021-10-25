@@ -166,7 +166,7 @@ public class Simulator implements ContextBuilder<Object> {
 			System.out.println("Initiating blockchain nodes was started...");
 			
 			// Initiation: Start blockchain nodes.
-			/*try {
+			try {
 				deployBlockchainNodes();
 			} catch (IOException e) {
 		        e.printStackTrace();
@@ -195,7 +195,7 @@ public class Simulator implements ContextBuilder<Object> {
 			    } catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			}*/
+			}
 		}
 		
 		// Initiation: Create random counterparts for banks and Assign their initial assets and liabilities.
