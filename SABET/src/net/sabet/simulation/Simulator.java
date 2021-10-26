@@ -37,8 +37,8 @@ import repast.simphony.random.RandomHelper;
 
 public class Simulator implements ContextBuilder<Object> {
 
-	int bankCount = 10;
-	int counterpartyMax = 3;
+	int bankCount = 401;
+	int counterpartyMax = 20;
 	public static double capitalAdequacyRatio = 0.08;
 	public static double leverageRatio = 0.03;
 	public static double liquidityCoverageRatio = 1.0;
@@ -59,8 +59,10 @@ public class Simulator implements ContextBuilder<Object> {
 	public static double corridorUp = 0.02;
 	public static double termDepositInterest = 0.01;
 	public static double bankruptcyLikelihood = 0.5;
-	public static double uncertaintyDown = 0.1;
-	public static double uncertaintyUp = 0.25;
+	public static double assetsNoise = 0.2;
+	public static double cashlessPayment = 0.01;
+	//public static double uncertaintyDown = 0.1;
+	//public static double uncertaintyUp = 0.25;
 	
 	double smallBanksShare = 0.15;
 	double smallBanksMean = 9640.741;
@@ -82,8 +84,8 @@ public class Simulator implements ContextBuilder<Object> {
 			{	0.05,	0.0,	0.10,	0.60,	0.25,	0.05,	0.0,	0.35,	0.35,	0.25	}	// Large banks
 		};
 	
-	// Drifts for different economic cycles:
-	double[][] uncertaintyDrift = {
+	// Noises for different economic cycles:
+	double[][] uncertaintyNoise = {
 			//	GrwthL,	GrwthH,	DclnL,	DclnH,	RcssnL,	RcssnH
 			{	0.0,	0.005,	0.05,	0.10,	0.10,	0.25	},	// Credits
 			{	0.0,	0.003,	0.03,	0.06,	0.06,	0.15	},	// Term deposits
@@ -125,8 +127,10 @@ public class Simulator implements ContextBuilder<Object> {
 		maxLoanDuration = (Integer) params.getValue("maximum_loan_duration");
 		termDepositInterest = (Double) params.getValue("interest_rate_for_term_deposits");
 		bankruptcyLikelihood = (Double) params.getValue("probability_of_bankruptcy");
-		uncertaintyDown = (Double) params.getValue("lower_limit_of_uncertainty");
-		uncertaintyUp = (Double) params.getValue("upper_limit_of_uncertainty");
+		assetsNoise = (Double) params.getValue("assets_noise");
+		cashlessPayment = (Double) params.getValue("cashless_payment");
+		//uncertaintyDown = (Double) params.getValue("lower_limit_of_uncertainty");
+		//uncertaintyUp = (Double) params.getValue("upper_limit_of_uncertainty");
 		smallBanksShare = (Double) params.getValue("small_banks_share");
 		smallBanksMean = (Double) params.getValue("mean_of_small_banks_assets");
 		mediumBanksShare = (Double) params.getValue("medium_banks_share");
@@ -147,8 +151,28 @@ public class Simulator implements ContextBuilder<Object> {
 			bankList.add(bank);
 		}
 		
-		// Print the status:
+		// Determine the uncertainty of banks.
 		for (Bank b : bankList) {
+			switch (economicGrowthScenario) {
+			case 0:	b.cUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
+					b.dUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
+					b.pUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
+					break;
+			case 1:	b.cUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][0], uncertaintyNoise[0][1]);
+					b.dUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][0], uncertaintyNoise[1][1]);
+					b.pUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][0], uncertaintyNoise[2][1]);
+					break;
+			case 2:	b.cUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][2], uncertaintyNoise[0][3]);
+					b.dUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][2], uncertaintyNoise[1][3]);
+					b.pUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][2], uncertaintyNoise[2][3]);
+					break;
+			case 3:	b.cUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][4], uncertaintyNoise[0][5]);
+					b.dUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][4], uncertaintyNoise[1][5]);
+					b.pUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][4], uncertaintyNoise[2][5]);
+					break;
+			}
+			
+			// Print the status:
 			System.out.println("Bank "+b.title+" was initiated.");
 		}
 			
@@ -259,7 +283,8 @@ public class Simulator implements ContextBuilder<Object> {
 				b.size = BankSize.Medium;
 				totAssetsMean = mediumBanksMean;
 			}
-			totAssetsStdDev = totAssetsMean * RandomHelper.nextDoubleFromTo(uncertaintyDown, uncertaintyUp);
+			//totAssetsStdDev = totAssetsMean * RandomHelper.nextDoubleFromTo(uncertaintyDown, uncertaintyUp);
+			totAssetsStdDev = totAssetsMean * assetsNoise;
 			
 			DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
 			defaultRegistry.createNormal(totAssetsMean, totAssetsStdDev);
@@ -495,7 +520,7 @@ public class Simulator implements ContextBuilder<Object> {
 		System.out.println("\nThe results of the simulation of Tick #"+t+":");
 		System.out.println("---------------------------------------");
 
-		// 0- The values of the balance sheet of the last tick are stored.
+		// 0- The values of the balance sheet of the last tick are stored. Also, the uncertainty is determined.
 		stBank.forEach(x -> {
 			Bank b = (Bank) x;
 			bankList.add(b);

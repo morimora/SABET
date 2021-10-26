@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <parameters>
 				<parameter name="bank_count" displayName="Bank count" type="int" 
-						defaultValue="10" 
+						defaultValue="401" 
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
 											/>
@@ -126,7 +126,7 @@
 						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
 											/>
 				<parameter name="counterparties_maximum" displayName="Maximum number of counterparties" type="int" 
-						defaultValue="3" 
+						defaultValue="20" 
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
 											/>
@@ -160,13 +160,13 @@
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
 											/>
-				<parameter name="lower_limit_of_uncertainty" displayName="Lower limit of uncertainty" type="double" 
-						defaultValue="0.1" 
+				<parameter name="assets_noise" displayName="Assets distribution noise" type="double" 
+						defaultValue="0.2" 
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
 											/>
-				<parameter name="upper_limit_of_uncertainty" displayName="Upper limit of uncertainty" type="double" 
-						defaultValue="0.25" 
+				<parameter name="cashless_payment" displayName="Average ratio of cashless payments" type="double" 
+						defaultValue="0.01" 
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$DoubleConverter"
 											/>

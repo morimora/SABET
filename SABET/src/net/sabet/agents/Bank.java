@@ -121,8 +121,9 @@ public class Bank extends EcoAgent {
 	public String title;
 	public BankSize size;
 	
-	public double uncertaintyDown;
-	public double uncertaintyUp;
+	public double cUncertainty;
+	public double dUncertainty;
+	public double pUncertainty;
 	
 	public Bank() {
 		
@@ -194,7 +195,13 @@ public class Bank extends EcoAgent {
 				.mapToDouble(Double::doubleValue)
 				.summaryStatistics()
 				.getAverage();
-		if (depositsList.size() > 1) {
+		double depositsStdDeviation = dUncertainty * depositsMean;
+		
+		DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
+		defaultRegistry.createNormal(depositsMean, depositsStdDeviation);
+		clientTermDeposits = defaultRegistry.getNormal().nextDouble();
+		
+		/*if (depositsList.size() > 1) {
 			DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
 			double depositsRawSum = depositsList.stream()
 					.map(x -> Math.pow(x - depositsMean, 2))
@@ -207,7 +214,7 @@ public class Bank extends EcoAgent {
 			double randomDepositChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
 			clientTermDeposits = depositsMean
 					* RandomHelper.nextDoubleFromTo(1 - randomDepositChange, 1 + randomDepositChange);
-		}
+		}*/
 		depositsList.add(clientTermDeposits);
 		
 		double difclientTermDeposits = lastClientTermDeposits - clientTermDeposits;
@@ -231,8 +238,13 @@ public class Bank extends EcoAgent {
 				.mapToDouble(Double::doubleValue)
 				.summaryStatistics()
 				.getAverage();
-		double normalCredits, newCredits, creditsStdDeviation, difClientCredits, interest;
-		if (creditsList.size() > 1) {
+		double creditsStdDeviation = cUncertainty * creditsMean;
+		double normalCredits, newCredits, difClientCredits, interest;
+		
+		DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
+		defaultRegistry.createNormal(creditsMean, creditsStdDeviation);
+		normalCredits = defaultRegistry.getNormal().nextDouble();
+		/*if (creditsList.size() > 1) {
 			DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
 			double creditsRawSum = creditsList.stream()
 					.map(x -> Math.pow(x - creditsMean, 2))
@@ -245,7 +257,7 @@ public class Bank extends EcoAgent {
 			double randomCreditChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
 			normalCredits = creditsMean
 					* RandomHelper.nextDoubleFromTo(1 - randomCreditChange, 1 + randomCreditChange);
-		}
+		}*/
 		
 		double interestRate = RandomHelper.nextDoubleFromTo(Simulator.corridorDown, Simulator.corridorUp);
 		do {
