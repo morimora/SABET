@@ -1,0 +1,21 @@
+<repast.simphony.data2.engine.FileSinkDescriptor simphonyVersion="2.8.0">
+  <name>IMM Statistics</name>
+  <dataSet>IMM Statistics</dataSet>
+  <delimiter>,</delimiter>
+  <format>TABULAR</format>
+  <sourceIds class="linked-hash-set">
+    <string>Loans</string>
+    <string>Loan requests</string>
+    <string>tick</string>
+    <string>Banks</string>
+    <string>Total central bank loans</string>
+    <string>Total cash &amp; reserve</string>
+    <string>Total client loans</string>
+    <string>Total current accounts</string>
+    <string>Total interbank loans</string>
+    <string>Total securities</string>
+    <string>Total term deposits</string>
+  </sourceIds>
+  <fileName>IMM_Statistics.csv</fileName>
+  <addTimeStamp>true</addTimeStamp>
+</repast.simphony.data2.engine.FileSinkDescriptor>

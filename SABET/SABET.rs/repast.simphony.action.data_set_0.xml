@@ -1,0 +1,111 @@
+<repast.simphony.data2.engine.DataSetDescriptor simphonyVersion="2.8.0">
+  <name>IMM Statistics</name>
+  <type>AGGREGATE</type>
+  <inclTick>true</inclTick>
+  <inclBatchRun>false</inclBatchRun>
+  <inclRandomSeed>false</inclRandomSeed>
+  <scheduleParams>
+    <start>1.0</start>
+    <interval>1.0</interval>
+    <priority>-Infinity</priority>
+    <pType>LAST</pType>
+    <duration>-1.0</duration>
+    <frequency>REPEAT</frequency>
+    <hashCode>-265451604</hashCode>
+  </scheduleParams>
+  <atEnd>false</atEnd>
+  <methodDataSources class="linked-hash-map">
+    <entry>
+      <string>Loans</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Loans</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportTotalLoans</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Loan requests</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Loan requests</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportLoanRequests</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total central bank loans</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total central bank loans</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportCBFund</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total cash &amp; reserve</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total cash &amp; reserve</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportCash</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total client loans</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total client loans</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportClientCredit</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total term deposits</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total term deposits</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportTermDeposit</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total current accounts</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total current accounts</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportCurrentAccount</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total interbank loans</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total interbank loans</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportInterbankLoan</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+    <entry>
+      <string>Total securities</string>
+      <repast.simphony.data2.engine.MethodDataSourceDefinition>
+        <id>Total securities</id>
+        <className>net.sabet.agents.Bank</className>
+        <methodName>reportSecurities</methodName>
+        <aggType>SUM</aggType>
+      </repast.simphony.data2.engine.MethodDataSourceDefinition>
+    </entry>
+  </methodDataSources>
+  <countSources class="linked-hash-map">
+    <entry>
+      <string>Banks</string>
+      <repast.simphony.data2.engine.CountSourceDefinition>
+        <typeName>net.sabet.agents.Bank</typeName>
+        <id>Banks</id>
+      </repast.simphony.data2.engine.CountSourceDefinition>
+    </entry>
+  </countSources>
+  <customNADataSources class="linked-hash-map"/>
+  <customAggDataSources class="linked-hash-map"/>
+</repast.simphony.data2.engine.DataSetDescriptor>
