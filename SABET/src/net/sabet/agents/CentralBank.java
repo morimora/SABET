@@ -64,20 +64,6 @@ public class CentralBank extends RegAgent {
 			DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
 			defaultRegistry.createNormal(paymentsMean, paymentsStdDeviation);
 			totalPayment = defaultRegistry.getNormal().nextDouble();
-			/*if (b.paymentsList.size() > 1) {
-				DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
-				double paymentsRawSum = b.paymentsList.stream()
-						.map(x -> Math.pow(x - paymentsMean, 2))
-						.mapToDouble(Double::doubleValue)
-						.sum();
-				double paymentsStdDeviation = Math.sqrt(paymentsRawSum / (b.paymentsList.size() - 1));
-				defaultRegistry.createNormal(paymentsMean, paymentsStdDeviation);
-				totalPayment = defaultRegistry.getNormal().nextDouble();
-			} else {
-				double randompaymentChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
-				totalPayment = paymentsMean
-						* RandomHelper.nextDoubleFromTo(1 - randompaymentChange, 1 + randompaymentChange);
-			}*/
 			if (totalPayment > b.clientDemandDeposits || totalPayment < 0) {
 				totalPayment = RandomHelper.nextDoubleFromTo(0, b.clientDemandDeposits);
 			}

@@ -180,6 +180,11 @@
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
 											/>
+				<parameter name="trust_scenario" displayName="Trust scenario" type="boolean"
+						defaultValue="true" 
+						isReadOnly="false" 
+						converter="repast.simphony.parameter.StringConverterFactory$BooleanConverter"
+											/>
 		</parameters>
 
 

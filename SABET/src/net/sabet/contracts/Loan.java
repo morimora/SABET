@@ -28,9 +28,10 @@ public class Loan {
 	public int duration = 1; // just overnight loans
 	public int timer = 0;
 	String transactionIdInBlockchain;
-	public static boolean repaid = false;
+	public boolean repaid = false;
 	public boolean evaluated = false;
 	public boolean defaulted = false;
+	public boolean payAtEOD = false;
 	public long repeatRepay = 0;
 	
 	public Loan(Bank lender, Bank borrower, double amount, double interestRate, int duration) {

@@ -11,7 +11,9 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Stack;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
@@ -23,12 +25,24 @@ import net.sabet.contracts.Loan;
 import net.sabet.enums.BankSize;
 import net.sabet.enums.CounterpartyType;
 import repast.simphony.context.Context;
+import repast.simphony.context.space.graph.NetworkBuilder;
 import repast.simphony.dataLoader.ContextBuilder;
 import repast.simphony.engine.environment.RunEnvironment;
 import repast.simphony.engine.schedule.ScheduleParameters;
 import repast.simphony.parameter.Parameters;
 import repast.simphony.random.DefaultRandomRegistry;
 import repast.simphony.random.RandomHelper;
+import repast.simphony.space.graph.Network;
+import repast.simphony.space.graph.RepastEdge;
+import repast.simphony.space.graph.ShortestPath;
+
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.alg.shortestpath.*;
+import org.jgrapht.graph.DefaultDirectedGraph;
+import org.jgrapht.graph.DefaultDirectedWeightedGraph;
+import org.jgrapht.graph.DefaultEdge;
+import org.jgrapht.graph.DefaultWeightedEdge;
 
 /**
  * @author morteza
@@ -60,24 +74,23 @@ public class Simulator implements ContextBuilder<Object> {
 	public static double termDepositInterest = 0.01;
 	public static double bankruptcyLikelihood = 0.5;
 	public static double assetsNoise = 0.2;
-	public static double cashlessPayment = 0.01;
-	//public static double uncertaintyDown = 0.1;
-	//public static double uncertaintyUp = 0.25;
+	public static double cashlessPayment = 0.009;
 	
 	double smallBanksShare = 0.15;
-	double smallBanksMean = 9640.741;
+	public static double smallBanksMean = 9640.741;
 	
 	double mediumBanksShare = 0.25;
-	double mediumBanksMean = 16100.038;
+	public static double mediumBanksMean = 16100.038;
 	
 	double largeBanksShare = 0.60;
-	double largeBanksMean = 35670.742;
+	public static double largeBanksMean = 35670.742;
 	
 	public static boolean blockchainON = false;
 	public static int economicGrowthScenario = 0;
+	public static boolean trustScenario = true;
 
 	// Balance sheet coefficients for banks:
-	double[][] balanceSheetShare = {
+	public static double[][] balanceSheetShare = {
 			//	Rsrv,	BScrt,	Scrt,	CCrdt,	IBClm,	Eqt,	CBFnd,	CTDpst,	CCAcnt, IBFnd
 			{	0.10,	0.0,	0.20,	0.65,	0.05,	0.15,	0.0,	0.40,	0.40,	0.05	},	// Small banks
 			{	0.05,	0.0,	0.15,	0.70,	0.10,	0.10,	0.0,	0.40,	0.40,	0.10	},	// Medium banks
@@ -101,7 +114,10 @@ public class Simulator implements ContextBuilder<Object> {
 	public Context build(Context<Object> context) {
 		
 		context.setId("SABET");
-		String[] args = new String[1];
+
+		NetworkBuilder<Object> netBuilder, graphBuilder;
+		netBuilder = new NetworkBuilder<Object>("IMM network", context, true);
+		netBuilder.buildNetwork();
 
 		// Define initial parameters.
 		Parameters params = RunEnvironment.getInstance().getParameters();
@@ -129,8 +145,6 @@ public class Simulator implements ContextBuilder<Object> {
 		bankruptcyLikelihood = (Double) params.getValue("probability_of_bankruptcy");
 		assetsNoise = (Double) params.getValue("assets_noise");
 		cashlessPayment = (Double) params.getValue("cashless_payment");
-		//uncertaintyDown = (Double) params.getValue("lower_limit_of_uncertainty");
-		//uncertaintyUp = (Double) params.getValue("upper_limit_of_uncertainty");
 		smallBanksShare = (Double) params.getValue("small_banks_share");
 		smallBanksMean = (Double) params.getValue("mean_of_small_banks_assets");
 		mediumBanksShare = (Double) params.getValue("medium_banks_share");
@@ -139,6 +153,7 @@ public class Simulator implements ContextBuilder<Object> {
 		largeBanksMean = (Double) params.getValue("mean_of_large_banks_assets");
 		blockchainON = (Boolean) params.getValue("blockchain_ON");
 		economicGrowthScenario = (Integer) params.getValue("economic_growth_scenario");
+		trustScenario = (Boolean) params.getValue("trust_scenario");
 		
 		// Print the status:
 		System.out.println("The results of the initiation step:");
@@ -147,6 +162,16 @@ public class Simulator implements ContextBuilder<Object> {
 		// Initiation: Create banks.
 		for (int i = 0; i < bankCount; i++) {
 			Bank bank = new Bank();
+			
+			// Determine bank size.
+			if (i >= Math.round(bankCount * largeBanksShare) - 1) {
+				bank.size = BankSize.Large;
+			} else if (i <= Math.round(bankCount * smallBanksShare) - 1) {
+				bank.size = BankSize.Small;
+			} else {
+				bank.size = BankSize.Medium;
+			}
+			
 			context.add(bank);
 			bankList.add(bank);
 		}
@@ -184,7 +209,7 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("The central bank "+centralBank.title+" was initiated.");
 		
-		if (blockchainON == true) {
+		if (blockchainON) {
 			
 			// Print the status:
 			System.out.println("Initiating blockchain nodes was started...");
@@ -234,7 +259,10 @@ public class Simulator implements ContextBuilder<Object> {
 				Long capacity = bankList.get(index).counterpartyList.stream()
 						.filter(x -> CounterpartyType.Lending.equals(x.getType()))
 						.count();
-				while (index == bankList.indexOf(b) || checkRepeatedRandom(indexList, index) || capacity > counterpartyMax) {
+				while (index == bankList.indexOf(b)
+						|| checkConflict(b, bankList.get(index))
+						|| checkRepeatedRandom(indexList, index)
+						|| capacity > counterpartyMax) {
 					index = RandomHelper.nextIntFromTo(0,bankCount-1);
 					capacity = bankList.get(index).counterpartyList.stream()
 							.filter(x -> CounterpartyType.Lending.equals(x.getType()))
@@ -269,18 +297,14 @@ public class Simulator implements ContextBuilder<Object> {
 			// Initiation: Assign initial assets and liabilities to each bank.
 			int size;
 			double totAssetsMean, totAssetsStdDev;
-			double sizeFinder = RandomHelper.nextDoubleFromTo(0, 1);
-			if (sizeFinder <= smallBanksShare) {
+			if (b.size == BankSize.Small) {
 				size = 0;
-				b.size = BankSize.Small;
 				totAssetsMean = smallBanksMean;
-			} else if (sizeFinder > 1 - largeBanksShare) {
+			} else if (b.size == BankSize.Large) {
 				size = 2;
-				b.size = BankSize.Large;
 				totAssetsMean = largeBanksMean;
 			} else {
 				size = 1;
-				b.size = BankSize.Medium;
 				totAssetsMean = mediumBanksMean;
 			}
 			//totAssetsStdDev = totAssetsMean * RandomHelper.nextDoubleFromTo(uncertaintyDown, uncertaintyUp);
@@ -294,12 +318,13 @@ public class Simulator implements ContextBuilder<Object> {
 			b.pledgedSecurities = totAssets * balanceSheetShare[size][1];
 			b.securities = totAssets * balanceSheetShare[size][2];
 			b.clientCredits = totAssets * balanceSheetShare[size][3];
-			b.interbankClaims = totAssets * RandomHelper.nextDoubleFromTo(0, balanceSheetShare[size][4]);
+			b.interbankClaims = 0.0;//totAssets * RandomHelper.nextDoubleFromTo(0, balanceSheetShare[size][4]);
 			b.equity = totAssets * balanceSheetShare[size][5];
 			b.centralBankFunds = totAssets * balanceSheetShare[size][6];
 			b.clientTermDeposits = totAssets * balanceSheetShare[size][7];
 			b.clientDemandDeposits = totAssets * balanceSheetShare[size][8];
-			b.interbankFunds = 0.0;
+			b.interbankFunds = totAssets * balanceSheetShare[size][9];
+			b.cashAndCentralBankDeposit += totAssets * balanceSheetShare[size][4];
 			
 			// Print the status:
 			System.out.println("Balance sheet items of bank "+b.title+" were assigned.\n");
@@ -307,7 +332,28 @@ public class Simulator implements ContextBuilder<Object> {
 			b.liquidityExcessDeficit = 0.0;
 		}
 		
-		// Initiation: Calculate and assign interbank funds based on interbank claims.
+		// Initiation: Calculate and assign interbank loans.
+		for (Bank b : bankList.stream().filter(x -> x.interbankFunds > 0).collect(Collectors.toList())) {
+			Bank l = (b.counterpartyList.stream()
+						.filter(x -> CounterpartyType.Borrowing.equals(x.getType()))
+						.findAny()
+						.get())
+					.getCounterparty();
+			double fund = b.interbankFunds;
+			double interestRate = RandomHelper.nextDoubleFromTo(corridorDown, corridorUp);
+			int duration = RandomHelper.nextIntFromTo(1, maxLoanDuration);
+			try {
+				Loan loan = new Loan(l, b, fund, interestRate, duration);
+				l.interbankClaims += fund;
+				l.cashAndCentralBankDeposit -= fund;
+				l.lendingList.add(loan);
+				b.borrowingList.add(loan);
+			} catch (Throwable t) {
+				t.printStackTrace();
+				b.interbankFunds -= fund;
+			}
+		}
+		/*// Initiation: Calculate and assign interbank funds based on interbank claims.
 		for (Bank l : bankList) {
 			int counter = (int) l.counterpartyList.stream()
 					.filter(x -> CounterpartyType.Lending.equals(x.getType()))
@@ -338,7 +384,7 @@ public class Simulator implements ContextBuilder<Object> {
 			} else {
 				l.interbankClaims = 0.0;
 			}
-		}
+		}*/
 		
 		// Print the status:
 		for (Bank b : bankList) {
@@ -377,13 +423,14 @@ public class Simulator implements ContextBuilder<Object> {
 			b.liquidityExcessDeficit = 0.0;
 			double minReserve = (b.clientTermDeposits + b.clientDemandDeposits) * cashReserveRatio
 					+ b.equity * capitalBuffer;
+					/*- Math.min(0, b.complyLCR(lastBS));*/
 			if (b.cashAndCentralBankDeposit < minReserve) {
 				b.equity += (minReserve - b.cashAndCentralBankDeposit);
 				b.cashAndCentralBankDeposit = minReserve;
 			}
 			
 			// Print the status:
-			System.out.println("\nBank "+b.title+"'s balance sheet:");
+			System.out.println("\nBank "+b.title+"'s balance sheet ("+b.size+"):");
 			System.out.println("             Assets            |          Liabilities          ");
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("Rsrv: "+b.cashAndCentralBankDeposit, 30, " ")
@@ -420,6 +467,27 @@ public class Simulator implements ContextBuilder<Object> {
                 test = true;
             }
         }
+        return test;
+	}
+	
+	// This method checks if there is any conflicts in the size or type of relationship of initial counterparts.
+	private static boolean checkConflict(Bank b1, Bank b2) {
+		
+        boolean test = false;
+        
+        if (b1.size == BankSize.Large && b2.size == BankSize.Large) {
+        	test = true;
+        }
+        if (b1.size == BankSize.Small && b2.size == BankSize.Small) {
+        	test = true;
+        }
+        
+        long previousLink = b1.counterpartyList.stream().filter(x -> x.getCounterparty().equals(b2)).count()
+        		+ b2.counterpartyList.stream().filter(x -> x.getCounterparty().equals(b1)).count();
+        if (previousLink > 0) {
+        	test = true;
+        }
+        
         return test;
 	}
 	
@@ -508,6 +576,94 @@ public class Simulator implements ContextBuilder<Object> {
 		
 	}
 	
+	// This method tries to repay the overdue loans of one bank as well as the overdue loans of other related banks.
+	private void repayOverdueLoans (Bank b) {
+		Queue<Loan> debtList = new LinkedList<Loan>();
+		long firstOverdueLoan = b.borrowingList.stream()
+				.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+				.count();
+		if (firstOverdueLoan > 0) {
+			
+			// Print the status:
+			System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
+
+			//for (Loan l : b.borrowingList) {
+			for (int i = 0; i < firstOverdueLoan; i++) {
+				Loan l = b.borrowingList.stream().findFirst().get();
+				if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
+					b.repayLoan(l);
+				}
+			}
+		}
+		long secondOverdueLoan = b.borrowingList.stream()
+				.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+				.count();
+		
+		if (secondOverdueLoan < firstOverdueLoan) {
+			
+			// Print the status:
+			System.out.println("Other banks tried to repay their overdue loans...");
+
+			debtList.clear();
+			for (Bank bb : bankList) {
+				b.borrowingList.stream().forEach(x -> {
+					Loan l = (Loan) x;
+					if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
+						debtList.add(l);
+					}
+				});
+			}
+			
+			while (debtList.size() > 0) {
+				
+				// Print the status:
+				System.out.println("\nNumber of loans in the queue: "+debtList.size());
+				
+				Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
+				l.repaid = false;
+				
+				// Print the status:
+				System.out.print(("Loan "+l).substring(25)+" is selected:");
+				System.out.print(" Borrower: bank "+l.borrower.title);
+				System.out.print(", Lender: bank "+l.lender.title);
+				
+				Bank bb = l.borrower;
+				boolean handled = b.repayLoan(l);
+				if (handled) {
+					
+					// Print the status:
+					System.out.println("	Loan is handled.");
+				} else {
+					debtList.add(l); // Add the loan to the end of the queue.
+					
+					// Print the status:
+					System.out.println("	Loan is moved to the end of the queue.");
+				}
+			}
+		}
+	}
+	
+	// This method finds all paths between the two nodes 'source' and 'target' in the graph.
+	public static List<GraphPath<Object, DefaultWeightedEdge>> findAllPaths(Object source, Object target) {
+		
+		Network<Object> network = (Network<Object>) context.getProjection("IMM network");
+		
+		// Make a JGraphT graph based on the IMM network.
+		Graph<Object, DefaultWeightedEdge> g = new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
+		network.getNodes().forEach(v -> g.addVertex(v));
+		network.getNodes().forEach(s -> network.getSuccessors(s)
+				.forEach(t -> g.addEdge(s, t)));
+		network.getNodes().forEach(s -> network.getSuccessors(s)
+				.forEach(t -> g.setEdgeWeight(s, t, network.getEdge(s, t).getWeight())));
+		
+		// Find all directed paths from the source to the target.
+		AllDirectedPaths<Object, DefaultWeightedEdge> p = new AllDirectedPaths<>(g);
+		List<GraphPath<Object, DefaultWeightedEdge>> allPaths = new ArrayList<>();
+		allPaths = p.getAllPaths(source, target, true, null);
+		
+		return allPaths;
+	}
+	
 	//This method manages the work flow of simulations for all banks.
 	public void simulateTicks() {
 		
@@ -520,7 +676,7 @@ public class Simulator implements ContextBuilder<Object> {
 		System.out.println("\nThe results of the simulation of Tick #"+t+":");
 		System.out.println("---------------------------------------");
 
-		// 0- The values of the balance sheet of the last tick are stored. Also, the uncertainty is determined.
+		// 0- The values of the balance sheet of the last tick are stored.
 		stBank.forEach(x -> {
 			Bank b = (Bank) x;
 			bankList.add(b);
@@ -579,13 +735,11 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("Tick #"+t+", Step 4, OK: Settlement of payments was done by the central bank.");
 
-		// 5- Banks repay those interbank debts that have matured as follows:
-		// 5.1- by their "cash and central bank deposit",
-		// 5.2- by borrowing from the central bank against their securities,
-		// 5.3- by their assets' fire sale,
-		// 5.4- otherwise, they will default.
+		// 5- Banks repay those interbank debts that have matured by their "cash and central bank deposit".
 		//    They update their borrowing list and lending list.
 		//    Also, lenders evaluate their counterparts and update their counterparty list.
+		//    In order to repay their loans, banks that need to receive amounts lent to other banks
+		//    will try several times during the repayment cycle.
 		Queue<Loan> debtList = new LinkedList<Loan>();
 		debtList.clear();
 		for (Bank b : bankList) {
@@ -631,7 +785,7 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("\nTick #"+t+", Step 5, OK: All loan repayments were finished.");
 
-		// 6- Banks calculate their liquidity excess or deficit.
+		// 6- Banks calculate their liquidity excess or deficit. They must comply with the liquidity coverage ratio.
 		for (Bank b : bankList) {
 			int idx = bankList.indexOf(b);
 			double[] lastBS = new double[10];
@@ -645,7 +799,8 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("Tick #"+t+", Step 6, OK: Banks' liquidity excess and deficit were calculated.\n");
 		
-		// 7- Banks provision their reserve;
+		// 7- Banks provision their reserve and update their liquidity excess/deficit.
+		//    Overdue loans are taken into account in liquidity excess/deficit calculations.
 		for (Bank b : bankList) {
 			b.provisionReserve();
 			
@@ -656,7 +811,7 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("\nTick #"+t+", Step 7, OK: Banks' reserve provisioning calculations were done.\n");
 		
-		// 8- Banks that have liquidity excess pay part of the surplus to buy securities.
+		// 8- Banks that have liquidity excess pay part of their surplus to buy securities.
 		//    They must comply with the authorized limit for the purchase of securities.
 		for (Bank b : bankList) {
 			if (b.liquidityExcessDeficit > 0) {
@@ -672,29 +827,97 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("\nTick #"+t+", Step 8, OK: Banks' investment in new securities were done.");
 		
-		// 9- Banks borrow from or lend to their counterparts based on their history and reserve.
+		// 9- Banks first borrow from or lend to their counterparts based on their history and reserve.
 		//    Borrowers send their request to lenders based on lenders' good history.
 		//    Lenders respond to the received requests based on their excess and borrowers' good history.
-		//    They must also comply with both capital adequacy ratios and leverage ratio on loans.
+		//    If counterparts do not meet the banks' need or excess, the borrowing banks send their request
+		//    to other banks, and the lending banks may accept these requests with stricter conditions.
+		//    They must also comply with both capital adequacy and leverage ratios on loans.
 		//    Moreover, borrowers evaluate their counterparts and update their counterparty list.
-		//    After being made up, borrowers try to repay their defaulted loans once again, if relevant.
+		//    After being made up, borrowers try to repay their overdue loans once again, if relevant.
 		
 		// Print the status:
 		System.out.println("Tick #"+t+", Step 9, Lending simulation strated...\n");
 		
 		for (Bank b : bankList) {
+			double firstLiquidity = b.liquidityExcessDeficit;
 			if (b.liquidityExcessDeficit < 0) {
-				b.requestLoan(-b.liquidityExcessDeficit);
+				b.requestLoanCounterpart(-b.liquidityExcessDeficit);
 			}
-			for (Loan l : b.borrowingList) {
-				if (l.defaulted && !l.repaid) {
-					b.repayLoan(l);
+			if (b.liquidityExcessDeficit < 0) {
+				b.requestLoanNonCounterpart(-b.liquidityExcessDeficit);
+			}
+			double secondLiquidity = b.liquidityExcessDeficit;
+
+/*a*/			if (secondLiquidity > firstLiquidity) {
+				repayOverdueLoans(b);
+			}
+			/*long firstOverdueLoan = b.borrowingList.stream()
+					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+					.count();
+			if (firstOverdueLoan > 0 && secondLiquidity > firstLiquidity) {
+				
+				// Print the status:
+				System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
+
+				//for (Loan l : b.borrowingList) {
+				for (int i = 0; i < firstOverdueLoan; i++) {
+					Loan l = b.borrowingList.stream().findFirst().get();
+					if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
+						b.repayLoan(l);
+					}
 				}
 			}
+			long secondOverdueLoan = b.borrowingList.stream()
+					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+					.count();
+			
+			if (secondOverdueLoan < firstOverdueLoan) {
+				
+				// Print the status:
+				System.out.println("Other banks tried to repay their overdue loans...");
+
+				debtList.clear();
+				for (Bank bb : bankList) {
+					b.borrowingList.stream().forEach(x -> {
+						Loan l = (Loan) x;
+						if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
+							debtList.add(l);
+						}
+					});
+				}
+				
+				while (debtList.size() > 0) {
+					
+					// Print the status:
+					System.out.println("\nNumber of loans in the queue: "+debtList.size());
+					
+					Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
+					l.repaid = false;
+					
+					// Print the status:
+					System.out.print(("Loan "+l).substring(25)+" is selected:");
+					System.out.print(" Borrower: bank "+l.borrower.title);
+					System.out.print(", Lender: bank "+l.lender.title);
+					
+					Bank bb = l.borrower;
+					boolean handled = b.repayLoan(l);
+					if (handled) {
+						
+						// Print the status:
+						System.out.println("	Loan is handled.");
+					} else {
+						debtList.add(l); // Add the loan to the end of the queue.
+						
+						// Print the status:
+						System.out.println("	Loan is moved to the end of the queue.");
+					}
+				}
+			}*/
 		}
 		
 		// Print the status:
-		System.out.println("\nTick #"+t+", Step 9, OK: All lending and default repayment simulations were done.");
+		System.out.println("\nTick #"+t+", Step 9, OK: All new loans and overdue loan repayments were simulated.");
 		
 		// 10- Banks repay their central bank debt with the rest of their liquidity surplus.
 		for (Bank b : bankList) {
@@ -709,28 +932,158 @@ public class Simulator implements ContextBuilder<Object> {
 		
 		// 11- Banks that have not been able to make up their liquidity deficit in the market will be refinanced
 		//     by the central bank if they have enough securities.
+		//     After being made up, borrowers try to repay their overdue loans once again, if relevant.
 		for (Bank b : bankList) {
 			if (b.liquidityExcessDeficit < 0 && b.securities > 0) {
 				b.refinanceByCentralBank(-b.liquidityExcessDeficit);
 			}
+			
+/*a*/			repayOverdueLoans(b);
+			/*long firstOverdueLoan = b.borrowingList.stream()
+					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+					.count();
+			if (firstOverdueLoan > 0) {
+				
+				// Print the status:
+				System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
+
+				//for (Loan l : b.borrowingList) {
+				for (int i = 0; i < firstOverdueLoan; i++) {
+					Loan l = b.borrowingList.stream().findFirst().get();
+					if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
+						b.repayLoan(l);
+					}
+				}
+			}
+			long secondOverdueLoan = b.borrowingList.stream()
+					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+					.count();
+			
+			if (secondOverdueLoan < firstOverdueLoan) {
+				
+				// Print the status:
+				System.out.println("Other banks tried to repay their overdue loans...");
+
+				debtList.clear();
+				for (Bank bb : bankList) {
+					b.borrowingList.stream().forEach(x -> {
+						Loan l = (Loan) x;
+						if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
+							debtList.add(l);
+						}
+					});
+				}
+				
+				while (debtList.size() > 0) {
+					
+					// Print the status:
+					System.out.println("\nNumber of loans in the queue: "+debtList.size());
+					
+					Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
+					l.repaid = false;
+					
+					// Print the status:
+					System.out.print(("Loan "+l).substring(25)+" is selected:");
+					System.out.print(" Borrower: bank "+l.borrower.title);
+					System.out.print(", Lender: bank "+l.lender.title);
+					
+					Bank bb = l.borrower;
+					boolean handled = b.repayLoan(l);
+					if (handled) {
+						
+						// Print the status:
+						System.out.println("	Loan is handled.");
+					} else {
+						debtList.add(l); // Add the loan to the end of the queue.
+						
+						// Print the status:
+						System.out.println("	Loan is moved to the end of the queue.");
+					}
+				}
+			}*/
 		}
 		
 		// Print the status:
 		System.out.println("Tick #"+t
-				+", Step 11, OK: All potential central bank refinances for making up banks' deficit were done.");
+				+", Step 11, OK: All potential central bank refinances and overdue loan repayments were simulated.");
 		
 		// 12- Banks that cannot make up for their lack of liquidity, either through interbank loans
-		//     or through central bank refinancing, will have to fire sale.
+		//     or through central bank refinancing, will have to fire sell.
+		//     After being made up, borrowers try to repay their overdue loans once again, if relevant.
 		for (Bank b : bankList) {
-			if (b.liquidityExcessDeficit < 0 && b.securities + b.interbankClaims > 0) {
+			if (b.liquidityExcessDeficit < 0 && b.securities + b.clientCredits > 0) {
 				double lossPercent = RandomHelper.nextDoubleFromTo(0, maxLossPercent);
 				b.fireSale(-b.liquidityExcessDeficit, lossPercent);
 			}
+			
+/*a*/			repayOverdueLoans(b);
+			/*long firstOverdueLoan = b.borrowingList.stream()
+					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+					.count();
+			if (firstOverdueLoan > 0) {
+				
+				// Print the status:
+				System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
+
+				//for (Loan l : b.borrowingList) {
+				for (int i = 0; i < firstOverdueLoan; i++) {
+					Loan l = b.borrowingList.stream().findFirst().get();
+					if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
+						b.repayLoan(l);
+					}
+				}
+			}
+			long secondOverdueLoan = b.borrowingList.stream()
+					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
+					.count();
+			
+			if (secondOverdueLoan < firstOverdueLoan) {
+				
+				// Print the status:
+				System.out.println("Other banks tried to repay their overdue loans...");
+
+				debtList.clear();
+				for (Bank bb : bankList) {
+					b.borrowingList.stream().forEach(x -> {
+						Loan l = (Loan) x;
+						if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
+							debtList.add(l);
+						}
+					});
+				}
+				
+				while (debtList.size() > 0) {
+					
+					// Print the status:
+					System.out.println("\nNumber of loans in the queue: "+debtList.size());
+					
+					Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
+					l.repaid = false;
+					
+					// Print the status:
+					System.out.print(("Loan "+l).substring(25)+" is selected:");
+					System.out.print(" Borrower: bank "+l.borrower.title);
+					System.out.print(", Lender: bank "+l.lender.title);
+					
+					Bank bb = l.borrower;
+					boolean handled = b.repayLoan(l);
+					if (handled) {
+						
+						// Print the status:
+						System.out.println("	Loan is handled.");
+					} else {
+						debtList.add(l); // Add the loan to the end of the queue.
+						
+						// Print the status:
+						System.out.println("	Loan is moved to the end of the queue.");
+					}
+				}
+			}*/
 		}
 		
 		// Print the status:
 		System.out.println("Tick #"+t
-				+", Step 12, OK: All potential firesales for making up banks' deficit were done.");
+				+", Step 12, OK: All potential firesales and overdue loan repayments were simulated.");
 		
 		// 13- At the end-of-day, a bank goes bankrupt if it fails to make up for its liquidity deficit
 		//     or its equity is zero or less and does not compensate these problems by raising its equity.

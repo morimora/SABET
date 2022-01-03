@@ -7,7 +7,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalDouble;
+import java.util.Stack;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.alg.shortestpath.AllDirectedPaths;
+import org.jgrapht.graph.DefaultDirectedWeightedGraph;
+import org.jgrapht.graph.DefaultWeightedEdge;
+
+import net.sabet.agents.Bank.Counterparty;
 import net.sabet.contracts.Loan;
 import net.sabet.enums.BankSize;
 import net.sabet.enums.CounterpartyType;
@@ -16,6 +28,9 @@ import net.sabet.simulation.Simulator;
 import repast.simphony.engine.environment.RunEnvironment;
 import repast.simphony.random.DefaultRandomRegistry;
 import repast.simphony.random.RandomHelper;
+import repast.simphony.space.graph.Network;
+import repast.simphony.space.graph.RepastEdge;
+import repast.simphony.space.graph.ShortestPath;
 
 /**
  * @author morteza
@@ -201,20 +216,6 @@ public class Bank extends EcoAgent {
 		defaultRegistry.createNormal(depositsMean, depositsStdDeviation);
 		clientTermDeposits = defaultRegistry.getNormal().nextDouble();
 		
-		/*if (depositsList.size() > 1) {
-			DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
-			double depositsRawSum = depositsList.stream()
-					.map(x -> Math.pow(x - depositsMean, 2))
-					.mapToDouble(Double::doubleValue)
-					.sum();
-			double depositsStdDeviation = Math.sqrt(depositsRawSum / (depositsList.size() - 1));
-			defaultRegistry.createNormal(depositsMean, depositsStdDeviation);
-			clientTermDeposits = defaultRegistry.getNormal().nextDouble();
-		} else {
-			double randomDepositChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
-			clientTermDeposits = depositsMean
-					* RandomHelper.nextDoubleFromTo(1 - randomDepositChange, 1 + randomDepositChange);
-		}*/
 		depositsList.add(clientTermDeposits);
 		
 		double difclientTermDeposits = lastClientTermDeposits - clientTermDeposits;
@@ -244,20 +245,6 @@ public class Bank extends EcoAgent {
 		DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
 		defaultRegistry.createNormal(creditsMean, creditsStdDeviation);
 		normalCredits = defaultRegistry.getNormal().nextDouble();
-		/*if (creditsList.size() > 1) {
-			DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
-			double creditsRawSum = creditsList.stream()
-					.map(x -> Math.pow(x - creditsMean, 2))
-					.mapToDouble(Double::doubleValue)
-					.sum();
-			creditsStdDeviation = Math.sqrt(creditsRawSum / (creditsList.size() - 1));
-			defaultRegistry.createNormal(creditsMean, creditsStdDeviation);
-			normalCredits = defaultRegistry.getNormal().nextDouble();
-		} else {
-			double randomCreditChange = RandomHelper.nextDoubleFromTo(Simulator.uncertaintyDown, Simulator.uncertaintyUp);
-			normalCredits = creditsMean
-					* RandomHelper.nextDoubleFromTo(1 - randomCreditChange, 1 + randomCreditChange);
-		}*/
 		
 		double interestRate = RandomHelper.nextDoubleFromTo(Simulator.corridorDown, Simulator.corridorUp);
 		do {
@@ -296,6 +283,112 @@ public class Bank extends EcoAgent {
 	
 	// This method repays the bank's loans that should be repaid in each tick.
 	public boolean repayLoan(Loan loan) {
+		
+		boolean handled = true;
+		double interest = loan.amount * (Math.pow(1 + loan.interestRate, loan.timer / 365) - 1); // calculation of interest
+		double amount = loan.amount + interest; // calculation of total payable amount
+		double credit = counterpartyList.stream() // calculation of total receivable amount
+				.filter(x -> CounterpartyType.Lending.equals(x.getType()))
+				.mapToDouble(y -> y.getCounterparty().borrowingList.stream()
+							.filter(z -> this.equals(z.lender))
+							.mapToDouble(w -> w.amount).sum()).sum();
+		long maxRepeat = Math.max(1, counterpartyList.stream() // finding maximum possible cycles of repayment 
+				.filter(x -> CounterpartyType.Lending.equals(x.getType()))
+				.count());
+		Bank l = loan.lender;
+		
+		// Print the status:
+		System.out.println(", Amount: "+amount);
+		System.out.println(" 	Borrower's cash and reserve: "+cashAndCentralBankDeposit);
+		
+		// Repay by "cash and central bank deposit".
+		if (cashAndCentralBankDeposit >= amount) {
+			
+			// Print the status:
+			System.out.println("		Loan was considered to be repaid by cash.");
+
+			// Send transaction to blockchain.
+			loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
+			
+			// If the transaction is accepted, change values.
+			if (loan.repaid) {
+				loan.payAtEOD = false;
+				
+				// Print the status:
+				System.out.println("			Loan was repaid by cash.");
+			} // If the transaction is not accepted, try at the end-of-day if not tried before.
+			else {
+				if (!loan.payAtEOD) {
+					loan.payAtEOD = true;
+					handled = false;
+					
+					// Print the status:
+					System.out.println("			Loan was postponed until the end-of-day due to blockchain uncommit.");
+				} else {
+					defaultLoan(loan);
+					loan.repaid = false;
+					
+					// Print the status:
+					System.out.println("			Loan was defaulted due to blockchain uncommit.");
+				}
+			}
+		} // Postpone loan till the next cycle of repayments.
+		else if (credit > amount && loan.repeatRepay <= maxRepeat) {
+			
+			// Print the status:
+			System.out.println("	Borrower's receivable cash (claims): "+credit);
+			System.out.println("		Loan was postponed to get more cash.");
+			
+			handled = false;
+			loan.repeatRepay++;
+		} // If receivable amount is greater than the loan amount, try at the end-of-day if not tried before.
+		else if (credit > amount && loan.repeatRepay > maxRepeat) {
+			if (!loan.payAtEOD) {
+				loan.payAtEOD = true;
+				handled = false;
+				
+				// Print the status:
+				System.out.println("			Loan was postponed until the end-of-day to get more cash.");
+			} else {
+				defaultLoan(loan);
+				loan.repaid = false;
+				
+				// Print the status:
+				System.out.println("			Loan was defaulted due to the lack of liquidity.");
+			}
+		} // Default.
+		else {
+			defaultLoan(loan);
+			loan.repaid = false;
+			
+			// Print the status:
+			System.out.println("	Borrower's securities: "+securities);
+			System.out.println("	Borrower's client credits: "+clientCredits);
+			System.out.println("		Loan was defaulted due to the lack of liquidity.");
+		}
+		
+		if (loan.repaid && handled) {
+			borrowingList.remove(loan);
+			l.lendingList.remove(loan);
+			
+			// Accounting
+			cashAndCentralBankDeposit -= amount;
+			interbankFunds -= loan.amount;
+			equity -= interest;
+			l.interbankClaims -= loan.amount;
+			l.cashAndCentralBankDeposit += amount;
+			l.equity += interest;
+		}
+		
+		// Evaluate the counterpart.
+		if (handled) {
+			l.evaluateBorrower(loan);
+		}
+		
+		//System.out.println("loan repaid: "+loan.repaid);
+		return handled;
+	}
+	/*public boolean repayLoan(Loan loan) {
 		
 		boolean handled = true;
 		double interest = loan.amount * (Math.pow(1 + loan.interestRate, loan.timer / 365) - 1);
@@ -437,7 +530,7 @@ public class Bank extends EcoAgent {
 		
 		//System.out.println("loan repaid: "+loan.repaid);
 		return handled;
-	}
+	}*/
 	
 	// This method supports all functions of the bank when it defaults.
 	public void defaultLoan(Loan loan) {
@@ -478,6 +571,27 @@ public class Bank extends EcoAgent {
 				System.out.println("		Borrower's bad history = "+c.badHistory);
 				System.out.println("		Borrower's good history = "+c.goodHistory);
 			}
+			
+			//Network
+			int trustLevel = 0;
+			int goodHistory = counterpartyList.stream()
+					.filter(x -> x.getCounterparty().equals(loan.borrower)
+							&& x.getType().equals(CounterpartyType.Lending))
+					.mapToInt(y -> y.getGoodHistory())
+					.findFirst()
+					.orElse(0);
+			int badHistory = counterpartyList.stream()
+					.filter(x -> x.getCounterparty().equals(loan.borrower)
+							&& x.getType().equals(CounterpartyType.Lending))
+					.mapToInt(y -> y.getBadHistory())
+					.findFirst()
+					.orElse(0);
+			if (goodHistory + badHistory > 0) {
+				trustLevel = Math.max(-1, Math.round((goodHistory - badHistory) / (goodHistory + badHistory) * 4));
+			}
+			Network<Object> network = (Network<Object>) Simulator.context.getProjection("IMM network");
+			network.removeEdge(network.getEdge(this, loan.borrower));
+			network.addEdge(this, loan.borrower, trustLevel);
 		}
 	}
 	
@@ -493,9 +607,9 @@ public class Bank extends EcoAgent {
 		centralBankFunds += cbFund;
 		
 		//liquidityExcessDeficit += need;
-		if (liquidityExcessDeficit + cbFund <= 0) {
+/*d*/		//if (liquidityExcessDeficit + cbFund <= 0) {
 			liquidityExcessDeficit += cbFund;
-		}
+/*d*/		//}
 	}
 	
 	// This method supports all functions related to the bank's firesale.
@@ -518,10 +632,9 @@ public class Bank extends EcoAgent {
 		clientCredits -= firedClaims;
 		equity -= loss;
 		
-		//liquidityExcessDeficit += need;
-		if (liquidityExcessDeficit + need <= 0) {
+/*d*/		//if (liquidityExcessDeficit + need <= 0) {
 			liquidityExcessDeficit += need;
-		}
+/*d*/		//}
 	}
 	
 	// This method calculates excess or deficit of the bank's liquidity.
@@ -553,7 +666,7 @@ public class Bank extends EcoAgent {
 				.filter(x -> x.defaulted)
 				.forEach(x -> x.repaid = false);
 		double debt = borrowingList.stream()
-				.filter(x -> /*!x.repaid &&*/ x.defaulted)
+/*a*/				.filter(x -> !x.repaid && (x.defaulted || x.payAtEOD))
 				.mapToDouble(x -> x.amount)
 				.sum();
 		
@@ -583,26 +696,27 @@ public class Bank extends EcoAgent {
 		}
 	}
 	
-	// This method sends the bank's loan application to the potential lenders.
-	public void requestLoan(double need) {
+	// This method sends the bank's loan application to the potential counterpart lenders.
+	public void requestLoanCounterpart(double need) {
 		
-		Collections.sort(counterpartyList);
-		List<Bank> availableLenders = counterpartyList.stream()
+		Collections.sort(counterpartyList); // Sort counterparts based on their history.
+		List<Bank> availableLenders = counterpartyList.stream() // Find a list of available lender counterparts.
 				.filter(x -> x.type == CounterpartyType.Borrowing)
 				.map(x -> x.counterparty)
 				.collect(Collectors.toList());
-		for (int i=0; i < availableLenders.size() && need > 0; i++) {
+		for (int i = 0; i < availableLenders.size() && need > 0; i++) {
 			Bank potentialLender = availableLenders.get(i);
 			
-			// Check if a defaulted loan from the selected lender already exists.
+			// Check if an overdue loan from the selected lender already exists.
 			double amount = need;
 			Loan debt = borrowingList.stream()
 					.filter(x -> potentialLender.equals(x.lender)
 							&& !x.repaid
-							&& x.defaulted
+							&& (x.defaulted || x.payAtEOD)
 							&& x.amount * Math.pow(1 + x.interestRate, x.timer / 365) > amount)
 					.findAny()
 					.orElse(null);
+			
 			int duration = RandomHelper.nextIntFromTo(1, Simulator.maxLoanDuration);
 			LoanRequest request = new LoanRequest(potentialLender, need, duration);
 			loanRequestList.add(request);
@@ -612,7 +726,7 @@ public class Bank extends EcoAgent {
 					+" requested a loan from bank "+potentialLender.title
 					+". Required amount = "+need);
 			
-			Loan loan = potentialLender.respondLoanRequest(this, request, debt);
+			Loan loan = potentialLender.respondLoanRequestCounterpart(this, request, debt);
 			if (loan != null) {
 				borrowingList.add(loan);
 				need -= loan.amount;
@@ -623,6 +737,7 @@ public class Bank extends EcoAgent {
 				
 				liquidityExcessDeficit += loan.amount;
 				
+				// If the new loan is to repay the previous loan, the previous loan should be repaid immediately.
 				if (debt != null) {
 					repayLoan(debt);
 				}
@@ -641,8 +756,85 @@ public class Bank extends EcoAgent {
 		}
 	}
 	
-	// This method responds the loan application received from the potential borrowers.
-	public Loan respondLoanRequest(Bank requestor, LoanRequest request, Loan credit) {
+	// This method sends the bank's loan application to other banks when it cannot meet its needs from its counterparts. 
+	public void requestLoanNonCounterpart(double need) {
+		
+		List<Bank> smallBanks = Simulator.bankList.stream() // Find a list of small banks.
+				.filter(x -> x.size == BankSize.Small)
+				.collect(Collectors.toList());
+		List<Bank> mediumBanks = Simulator.bankList.stream() // Find a list of Medium banks.
+				.filter(x -> x.size == BankSize.Medium)
+				.collect(Collectors.toList());
+		List<Bank> largeBanks = Simulator.bankList.stream() // Find a list of Large banks.
+				.filter(x -> x.size == BankSize.Large)
+				.collect(Collectors.toList());
+		
+		// Smaller banks borrow from larger banks and vice versa.
+		List<Bank> availableLenders;
+		if (size == BankSize.Large) {
+			availableLenders = Stream.concat(smallBanks.stream(), mediumBanks.stream())
+					.collect(Collectors.toList());
+			availableLenders = Stream.concat(availableLenders.stream(), largeBanks.stream())
+			.collect(Collectors.toList());
+		} else {
+			availableLenders = Stream.concat(largeBanks.stream(), mediumBanks.stream())
+					.collect(Collectors.toList());
+			availableLenders = Stream.concat(availableLenders.stream(), smallBanks.stream())
+			.collect(Collectors.toList());
+		}
+		
+		// Remove counterparts from the list of available non-counterpart lenders.
+		for (Counterparty c : counterpartyList) {
+			Bank b = c.counterparty;
+			availableLenders.remove(b);
+		}
+		availableLenders.remove(this);
+		
+		// Send request to available lenders.
+		for (int i = 0; i < availableLenders.size() && need > 0; i++) {
+			Bank potentialLender = availableLenders.get(i);
+			
+			int duration = RandomHelper.nextIntFromTo(1, Simulator.maxLoanDuration);
+			LoanRequest request = new LoanRequest(potentialLender, need, duration);
+			loanRequestList.add(request);
+			
+			// Print the status:
+			System.out.println("Bank "+title
+					+" requested a loan from bank "+potentialLender.title
+					+". Required amount = "+need);
+			
+			Loan loan = potentialLender.respondLoanRequestNonCounterpart(this, request);
+			if (loan != null) {
+				borrowingList.add(loan);
+				need -= loan.amount;
+				
+				// Accounting
+				interbankFunds += loan.amount;
+				cashAndCentralBankDeposit += loan.amount;
+				
+				liquidityExcessDeficit += loan.amount;
+				
+				// Print the status:
+				System.out.println("	Bank "+potentialLender.title
+						+" accepted the request of bank "+title
+						+". Loan amount = "+loan.amount);
+				
+				// Add new lender to the list of counterparts.
+				Counterparty c = new Counterparty(potentialLender, CounterpartyType.Borrowing);
+				counterpartyList.add(c);
+				
+				evaluateLender(request);
+			} else {
+				
+				// Print the status:
+				System.out.println("	Bank "+potentialLender.title
+						+" rejected the request of bank "+title);
+			}
+		}
+	}
+	
+	// This method responds the loan application received from the potential counterpart borrowers.
+	public Loan respondLoanRequestCounterpart(Bank requestor, LoanRequest request, Loan credit) {
 		
 		Loan loan = null;
 		double loanBudget = complyCAR();
@@ -678,6 +870,62 @@ public class Bank extends EcoAgent {
 		return loan;
 	}
 	
+	// This method responds the loan application received from the potential counterpart borrowers.
+	public Loan respondLoanRequestNonCounterpart(Bank requestor, LoanRequest request) {
+		
+		Loan loan = null;
+		double loanBudget = complyCAR();
+		double leveragedLimit = complyLeverage();
+		double liquiditySurplus = Math.max(0, lcrBasedSurplus);
+		double loanLimit = Math.min(
+				Math.min(liquidityExcessDeficit,liquiditySurplus),
+				Math.min(loanBudget, leveragedLimit));
+
+		int expectedTrust = 0;
+		int trustLevel = 0;
+		double randomDecision = 0.0;
+		boolean confirmed = false;
+		double interestRate = 0;
+		
+		if (loanLimit > 0) {
+			if (Simulator.trustScenario) {
+				expectedTrust = calculateTrustMarket();
+				trustLevel = calculateTrustLevel(requestor);
+				confirmed = (expectedTrust + trustLevel > 4) ? true : false;
+				interestRate = RandomHelper.nextDoubleFromTo(Simulator.corridorDown, Simulator.corridorUp);
+			} else {
+				randomDecision = RandomHelper.nextDoubleFromTo(0, 1);
+				confirmed = (randomDecision > 0.5) ? true : false;
+				double minInterestRate = (Simulator.trustScenario) ?
+						Simulator.corridorDown :
+							lendingList.stream().mapToDouble(x -> x.interestRate).max().orElse(Simulator.corridorDown);
+				interestRate = RandomHelper.nextDoubleFromTo(minInterestRate, Simulator.corridorUp);
+			}
+		}
+		
+		if (confirmed) {
+			
+			// Add new borrower to the list of counterparts.
+			Counterparty c = new Counterparty(requestor, CounterpartyType.Lending);
+			counterpartyList.add(c);
+
+			double amount = Math.min(request.amount, loanLimit);
+			request.accepted = true;
+			loan = new Loan(this, requestor, amount, interestRate, request.duration);
+			if (loan != null) {
+				lendingList.add(loan);
+				
+				// Accounting
+				interbankClaims += amount;
+				cashAndCentralBankDeposit -= amount;
+				
+				liquidityExcessDeficit -= amount;
+			}
+		}
+
+		return loan;
+	}
+
 	//This method evaluates lenders to the bank (borrowing counterparts).
 	public void evaluateLender (LoanRequest request) {
 		
@@ -740,6 +988,118 @@ public class Bank extends EcoAgent {
 		cashAndCentralBankDeposit -= liquidityExcessDeficit;
 	}
 	
+	// This method calculates the level of direct or indirect trust of a potential lender to a potential borrower.
+	// (VERY BAD PERFORMANCE)
+	public int calculateTrustLevel(Bank borrower) {
+		
+		int trustLevel = 0;
+		if (borrower == this ) {
+			trustLevel = 4;
+			return trustLevel;
+		}
+		
+		//boolean foundLast = false;
+		List<GraphPath<Object, DefaultWeightedEdge>> allPathsToBorrower = new ArrayList<>();
+		allPathsToBorrower = Simulator.findAllPaths(this, borrower);
+		if (allPathsToBorrower.size() > 0) {
+			Graph<Object, DefaultWeightedEdge> baseGraph = allPathsToBorrower.get(0).getGraph();
+			
+			// Create a smaller graph containing only the nodes between the source and the target. 
+			List<Object> vList = new ArrayList<>();
+			for (int i = 0; i < allPathsToBorrower.size(); i++) {
+				allPathsToBorrower.get(i).getVertexList().forEach(v -> {
+					if (!vList.contains(v)) {
+						vList.add(v);
+					}
+				});
+			}
+			List<DefaultWeightedEdge> eList = new ArrayList<>();
+			for (int i = 0; i < allPathsToBorrower.size(); i++) {
+				allPathsToBorrower.get(i).getEdgeList().forEach(e -> {
+					if (!eList.contains(e)) {
+						eList.add(e);
+					}
+				});
+			}
+			Graph<Object, DefaultWeightedEdge> lendingGraph =
+					new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
+			for (Object v : vList) {
+				lendingGraph.addVertex(v);
+			}
+			for (DefaultWeightedEdge e : eList) {
+				Object source = baseGraph.getEdgeSource(e);
+				Object target = baseGraph.getEdgeTarget(e);
+				double weight = baseGraph.getEdgeWeight(e);
+				lendingGraph.addEdge(source, target);
+				lendingGraph.setEdgeWeight(source, target, weight);
+			}
+			
+			// Calculate the level of trust.
+			int minConsented = (int) (Simulator.bankList.size() - 1) /3;
+			int maxConsented = (int) (2 * Simulator.bankList.size() + 1) / 3;
+			trustLevel = (int) Math.round(allPathsToBorrower.parallelStream()
+					.filter(p -> /*p.getLength() > minConsented &&*/ p.getLength() < maxConsented)
+					.mapToDouble(p ->
+							1 / Math.pow(4, p.getLength() - 1)
+									* p.getEdgeList().parallelStream()
+											.mapToDouble(e -> lendingGraph.getEdgeWeight(e))
+											.reduce(1, (a, b) -> a * b)
+									/ p.getEdgeList().parallelStream()
+											.map(e -> lendingGraph.getEdgeSource(e))
+											.map(v -> lendingGraph.outDegreeOf(v))
+											.reduce(1, (a, b) -> a * b)
+					)
+					.sum());
+			// Another implementation of this part:
+			/*for (int i = 0; i < allPathsToBorrower.size(); i++) {
+				GraphPath<Object, DefaultWeightedEdge> path = allPathsToBorrower.get(i);
+				int size = path.getLength();
+				double weight = path.getEdgeList().stream()
+						.mapToDouble(e -> lendingGraph.getEdgeWeight(e))
+						.reduce(1, (a, b) -> a * b);
+				int fork = path.getEdgeList().stream()
+						.map(e -> lendingGraph.getEdgeSource(e))
+						.map(v -> lendingGraph.outDegreeOf(v))
+						.reduce(1, (a, b) -> a * b);
+				trustLevel += (int) Math.round(weight / fork / Math.pow(4, size - 1));
+			}*/
+		}
+
+		// Print the status:
+		System.out.println("The level of trust of "+this.title+" to "+borrower.title+": "+trustLevel);
+		
+		return trustLevel;
+	}
+
+	// This method calculates the level of trust of a bank to the whole market.
+	// (TEMPORARY SOLUTION)
+	public int calculateTrustMarket() {
+		
+		int sizeTrust = 0;
+		double baseEquity = 0;
+		if (size == BankSize.Small) {
+			sizeTrust = 1;
+			baseEquity = Simulator.smallBanksMean * Simulator.balanceSheetShare[0][5];
+		}
+		else if (size == BankSize.Large) {
+			sizeTrust = -1;
+			baseEquity = Simulator.largeBanksMean * Simulator.balanceSheetShare[2][5];
+		}
+		else {
+			baseEquity = Simulator.mediumBanksMean * Simulator.balanceSheetShare[1][5];
+		}
+		int equityTrust = (equity > baseEquity) ? 2 :
+			(equity < baseEquity) ? 0 : 1;
+		int cbTrust = (pledgedSecurities > 0) ? 1 : 0;
+		/*int economyTrust = (Simulator.economicGrowthScenario ==1) ? 1:
+			(Simulator.economicGrowthScenario ==2) ? 0 : -1;*/
+		
+		int expectedTrust = Math.max(-1, sizeTrust + equityTrust + cbTrust /*+ economyTrust*/);
+		
+		return expectedTrust;
+	}
+	
+	// The methods below are for reporting:
 	public long reportTotalLoans() {
 		
 		long totalLoanCount = borrowingList.stream().count();
