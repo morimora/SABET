@@ -6,9 +6,11 @@ package net.sabet.agents;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalDouble;
 import java.util.Stack;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -130,6 +132,7 @@ public class Bank extends EcoAgent {
 	public double clientDemandDeposits;
 	public double interbankFunds;
 	
+	public double position = 0.0;
 	public double liquidityExcessDeficit = 0.0;
 	public double lcrBasedSurplus = 0.0;
 	public int identity;
@@ -139,6 +142,7 @@ public class Bank extends EcoAgent {
 	public double cUncertainty;
 	public double dUncertainty;
 	public double pUncertainty;
+	public double lUncertainty;
 	
 	public Bank() {
 		
@@ -388,149 +392,6 @@ public class Bank extends EcoAgent {
 		//System.out.println("loan repaid: "+loan.repaid);
 		return handled;
 	}
-	/*public boolean repayLoan(Loan loan) {
-		
-		boolean handled = true;
-		double interest = loan.amount * (Math.pow(1 + loan.interestRate, loan.timer / 365) - 1);
-		double amount = loan.amount + interest;
-		double deficit = 0.0;
-		double lossPercent = RandomHelper.nextDoubleFromTo(0, Simulator.maxLossPercent);
-		double credit = counterpartyList.stream()
-				.filter(x -> CounterpartyType.Lending.equals(x.getType()))
-				.mapToDouble(y -> y.getCounterparty().borrowingList.stream()
-							.filter(z -> this.equals(z.lender))
-							.mapToDouble(w -> w.amount).sum()).sum();
-		long maxRepeat = Math.max(1, counterpartyList.stream()
-				.filter(x -> CounterpartyType.Lending.equals(x.getType()))
-				.count());
-		Bank l = loan.lender;
-		
-		// Print the status:
-		System.out.println(", Amount: "+amount);
-		System.out.println(" 	Borrower's cash and reserve: "+cashAndCentralBankDeposit);
-		
-		// Repay by "cash and central bank deposit".
-		if (cashAndCentralBankDeposit >= amount) {
-			
-			// Print the status:
-			System.out.println("		Loan was considered to be repaid by cash.");
-
-			// Send transaction to blockchain.
-			loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
-			
-			// If the transaction is accepted, change values.
-			if (loan.repaid) {
-				
-				// Print the status:
-				System.out.println("			Loan was repaid by cash.");
-			} else {
-				defaultLoan(loan);
-				loan.repaid = false;
-				
-				// Print the status:
-				System.out.println("			Loan was defaulted due to blockchain uncommit.");
-			}
-		}// Repay by borrowing from the central bank against securities.
-		else if (cashAndCentralBankDeposit + securities >= amount) {
-			if (credit > 0.0 && loan.repeatRepay <= maxRepeat) {
-				
-				// Print the status:
-				System.out.println("	Borrower's receivable cash (claims): "+credit);
-				System.out.println("		Loan was postponed to get more cash.");
-				
-				handled = false;
-				loan.repeatRepay++;
-			} else {
-				
-				// Print the status:
-				System.out.println("	Borrower's securities: "+securities);
-				System.out.println("		Loan was considered to be repaid by the CB refinance.");
-				
-				// Send transaction to blockchain.
-				loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
-				
-				// If the transaction is accepted, change banks' balance sheet.
-				if (loan.repaid) {
-					deficit = amount - cashAndCentralBankDeposit;
-					refinanceByCentralBank(deficit);
-					
-					// Print the status:
-					System.out.println("			Loan was repaid by the CB refinance.");
-				} else {
-					defaultLoan(loan);
-					loan.repaid = false;
-					
-					// Print the status:
-					System.out.println("			Loan was defaulted due to blockchain uncommit.");
-				}
-			}
-		}// Repay by assets' fire sale.
-		else if (cashAndCentralBankDeposit + (securities + clientCredits) / (1 + lossPercent) >= amount) {
-			if (credit > 0.0 && loan.repeatRepay <= maxRepeat) {
-				
-				// Print the status:
-				System.out.println("	Borrower's receivable cash (claims): "+credit);
-				System.out.println("		Loan was postponed to get more cash.");
-				
-				handled = false;
-				loan.repeatRepay++;
-			} else {
-				
-				// Print the status:
-				System.out.println("	Borrower's securities: "+securities);
-				System.out.println("	Borrower's client credits: "+clientCredits);
-				System.out.println("		Loan was considered to be repaid by firesale.");
-				
-				// Send transaction to blockchain.
-				loan.repaid = loan.registerTransactionInBlockchain(this, l, amount);
-				
-				// If the transaction is accepted, change banks' balance sheet.
-				if (loan.repaid) {
-					deficit = amount - cashAndCentralBankDeposit;
-					fireSale(deficit, lossPercent);
-					
-					// Print the status:
-					System.out.println("			Loan was repaid by firesale.");
-				} else {
-					defaultLoan(loan);
-					loan.repaid = false;
-					
-					// Print the status:
-					System.out.println("			Loan was defaulted due to blockchain uncommit.");
-				}
-			}
-		}// Default.
-		else {
-			defaultLoan(loan);
-			loan.repaid = false;
-			
-			// Print the status:
-			System.out.println("	Borrower's securities: "+securities);
-			System.out.println("	Borrower's client credits: "+clientCredits);
-			System.out.println("		Loan is defaulted due to the lack of liquidity.");
-		}
-		
-		if (loan.repaid && handled) {
-			borrowingList.remove(loan);
-			l.lendingList.remove(loan);
-			
-			// Accounting
-			cashAndCentralBankDeposit -= amount;
-			interbankFunds -= loan.amount;
-			equity -= interest;
-			l.interbankClaims -= loan.amount;
-			l.cashAndCentralBankDeposit += amount;
-			l.equity += interest;
-		}
-		
-		// Evaluate the counterpart.
-		if (handled) {
-			l.evaluateBorrower(loan);
-		}
-		
-		//System.out.println("loan repaid: "+loan.repaid);
-		return handled;
-	}*/
 	
 	// This method supports all functions of the bank when it defaults.
 	public void defaultLoan(Loan loan) {
@@ -759,36 +620,32 @@ public class Bank extends EcoAgent {
 	// This method sends the bank's loan application to other banks when it cannot meet its needs from its counterparts. 
 	public void requestLoanNonCounterpart(double need) {
 		
-		List<Bank> smallBanks = Simulator.bankList.stream() // Find a list of small banks.
-				.filter(x -> x.size == BankSize.Small)
-				.collect(Collectors.toList());
-		List<Bank> mediumBanks = Simulator.bankList.stream() // Find a list of Medium banks.
-				.filter(x -> x.size == BankSize.Medium)
-				.collect(Collectors.toList());
-		List<Bank> largeBanks = Simulator.bankList.stream() // Find a list of Large banks.
-				.filter(x -> x.size == BankSize.Large)
-				.collect(Collectors.toList());
-		
 		// Smaller banks borrow from larger banks and vice versa.
 		List<Bank> availableLenders;
 		if (size == BankSize.Large) {
-			availableLenders = Stream.concat(smallBanks.stream(), mediumBanks.stream())
+			availableLenders = Stream.of(Simulator.smallLenders.stream(),
+											Simulator.mediumLenders.stream(),
+											Simulator.largeLenders.stream())
+					.flatMap(Function.identity())
+					.filter(x -> !x.equals(this))
 					.collect(Collectors.toList());
-			availableLenders = Stream.concat(availableLenders.stream(), largeBanks.stream())
-			.collect(Collectors.toList());
 		} else {
-			availableLenders = Stream.concat(largeBanks.stream(), mediumBanks.stream())
+			availableLenders = Stream.of(Simulator.largeLenders.stream(),
+											Simulator.mediumLenders.stream(),
+											Simulator.smallLenders.stream())
+					.flatMap(Function.identity())
+					.filter(x -> !x.equals(this))
 					.collect(Collectors.toList());
-			availableLenders = Stream.concat(availableLenders.stream(), smallBanks.stream())
-			.collect(Collectors.toList());
 		}
 		
 		// Remove counterparts from the list of available non-counterpart lenders.
-		for (Counterparty c : counterpartyList) {
-			Bank b = c.counterparty;
-			availableLenders.remove(b);
-		}
-		availableLenders.remove(this);
+		List<Bank> counterparties = counterpartyList.stream()
+				.filter(x -> x.getType().equals(CounterpartyType.Borrowing))
+				.map(x -> x.getCounterparty())
+				.collect(Collectors.toList());
+		availableLenders = availableLenders.stream()
+				.filter(x -> !counterparties.contains(x))
+				.collect(Collectors.toList());
 		
 		// Send request to available lenders.
 		for (int i = 0; i < availableLenders.size() && need > 0; i++) {
@@ -895,7 +752,7 @@ public class Bank extends EcoAgent {
 				interestRate = RandomHelper.nextDoubleFromTo(Simulator.corridorDown, Simulator.corridorUp);
 			} else {
 				randomDecision = RandomHelper.nextDoubleFromTo(0, 1);
-				confirmed = (randomDecision > 0.5) ? true : false;
+				confirmed = (randomDecision > lUncertainty) ? true : false;
 				double minInterestRate = (Simulator.trustScenario) ?
 						Simulator.corridorDown :
 							lendingList.stream().mapToDouble(x -> x.interestRate).max().orElse(Simulator.corridorDown);
@@ -926,6 +783,12 @@ public class Bank extends EcoAgent {
 		return loan;
 	}
 
+	//This method determines the bank's dominant position as a lenders or borrower.
+	public void determinePosition () {
+		
+		position += (interbankClaims - interbankFunds);
+	}
+	
 	//This method evaluates lenders to the bank (borrowing counterparts).
 	public void evaluateLender (LoanRequest request) {
 		

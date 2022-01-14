@@ -107,7 +107,11 @@ public class Simulator implements ContextBuilder<Object> {
 	
 	public static ArrayList<Bank> bankList = new ArrayList<>();
 	CentralBank centralBank;
-	
+
+	public static List<Bank> smallLenders;
+	public static List<Bank> mediumLenders;
+	public static List<Bank> largeLenders;
+
 	public static Context<Object> context;
 	
 	@Override
@@ -180,18 +184,22 @@ public class Simulator implements ContextBuilder<Object> {
 		for (Bank b : bankList) {
 			switch (economicGrowthScenario) {
 			case 0:	b.cUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
+					b.lUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
 					b.dUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
 					b.pUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
 					break;
 			case 1:	b.cUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][0], uncertaintyNoise[0][1]);
+					b.lUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][0], uncertaintyNoise[0][1]);
 					b.dUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][0], uncertaintyNoise[1][1]);
 					b.pUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][0], uncertaintyNoise[2][1]);
 					break;
 			case 2:	b.cUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][2], uncertaintyNoise[0][3]);
+					b.lUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][2], uncertaintyNoise[0][3]);
 					b.dUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][2], uncertaintyNoise[1][3]);
 					b.pUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][2], uncertaintyNoise[2][3]);
 					break;
 			case 3:	b.cUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][4], uncertaintyNoise[0][5]);
+					b.lUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][4], uncertaintyNoise[0][5]);
 					b.dUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][4], uncertaintyNoise[1][5]);
 					b.pUncertainty = RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][4], uncertaintyNoise[2][5]);
 					break;
@@ -353,38 +361,6 @@ public class Simulator implements ContextBuilder<Object> {
 				b.interbankFunds -= fund;
 			}
 		}
-		/*// Initiation: Calculate and assign interbank funds based on interbank claims.
-		for (Bank l : bankList) {
-			int counter = (int) l.counterpartyList.stream()
-					.filter(x -> CounterpartyType.Lending.equals(x.getType()))
-					.count();
-			if (counter > 0) {
-				double fund = l.interbankClaims / counter;
-				for (Counterparty c : l.counterpartyList) {
-					if (c.getType() == CounterpartyType.Lending) {
-						Bank b = c.getCounterparty();
-						Long debtCount = b.lendingList.stream().filter(x -> l.equals(x.borrower)).count();
-						if (debtCount == 0 ) {
-							double interestRate = RandomHelper.nextDoubleFromTo(corridorDown, corridorUp);
-							int duration = RandomHelper.nextIntFromTo(1, maxLoanDuration);
-							try {
-								Loan loan = new Loan(l, b, fund, interestRate, duration);
-								b.interbankFunds += fund;
-								l.lendingList.add(loan);
-								b.borrowingList.add(loan);
-							} catch (Throwable t) {
-								t.printStackTrace();
-								l.interbankClaims -= fund;
-							}
-						} else {
-							l.interbankClaims -= (fund * debtCount);
-						}
-					}
-				}
-			} else {
-				l.interbankClaims = 0.0;
-			}
-		}*/
 		
 		// Print the status:
 		for (Bank b : bankList) {
@@ -428,6 +404,7 @@ public class Simulator implements ContextBuilder<Object> {
 				b.equity += (minReserve - b.cashAndCentralBankDeposit);
 				b.cashAndCentralBankDeposit = minReserve;
 			}
+			b.position = b.interbankClaims - b.interbankFunds;
 			
 			// Print the status:
 			System.out.println("\nBank "+b.title+"'s balance sheet ("+b.size+"):");
@@ -677,6 +654,7 @@ public class Simulator implements ContextBuilder<Object> {
 		System.out.println("---------------------------------------");
 
 		// 0- The values of the balance sheet of the last tick are stored.
+		//    Three lists of small, medium, and large lending banks is also updated.
 		stBank.forEach(x -> {
 			Bank b = (Bank) x;
 			bankList.add(b);
@@ -694,6 +672,16 @@ public class Simulator implements ContextBuilder<Object> {
 			
 			b.liquidityExcessDeficit = 0.0;
 		});
+		
+		smallLenders = bankList.stream()
+				.filter(x -> x.size == BankSize.Small && x.position > 0)
+				.collect(Collectors.toList());
+		mediumLenders = bankList.stream()
+				.filter(x -> x.size == BankSize.Medium && x.position > 0)
+				.collect(Collectors.toList());
+		largeLenders = bankList.stream()
+				.filter(x -> x.size == BankSize.Large && x.position > 0)
+				.collect(Collectors.toList());
 		
 		// Print the status:
 		System.out.println("Tick #"+t+", Step 0, OK: The values of the balance sheets from the last tick were retrieved.");
@@ -848,72 +836,9 @@ public class Simulator implements ContextBuilder<Object> {
 				b.requestLoanNonCounterpart(-b.liquidityExcessDeficit);
 			}
 			double secondLiquidity = b.liquidityExcessDeficit;
-
-/*a*/			if (secondLiquidity > firstLiquidity) {
+			if (secondLiquidity > firstLiquidity) {
 				repayOverdueLoans(b);
 			}
-			/*long firstOverdueLoan = b.borrowingList.stream()
-					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
-					.count();
-			if (firstOverdueLoan > 0 && secondLiquidity > firstLiquidity) {
-				
-				// Print the status:
-				System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
-
-				//for (Loan l : b.borrowingList) {
-				for (int i = 0; i < firstOverdueLoan; i++) {
-					Loan l = b.borrowingList.stream().findFirst().get();
-					if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
-						b.repayLoan(l);
-					}
-				}
-			}
-			long secondOverdueLoan = b.borrowingList.stream()
-					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
-					.count();
-			
-			if (secondOverdueLoan < firstOverdueLoan) {
-				
-				// Print the status:
-				System.out.println("Other banks tried to repay their overdue loans...");
-
-				debtList.clear();
-				for (Bank bb : bankList) {
-					b.borrowingList.stream().forEach(x -> {
-						Loan l = (Loan) x;
-						if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
-							debtList.add(l);
-						}
-					});
-				}
-				
-				while (debtList.size() > 0) {
-					
-					// Print the status:
-					System.out.println("\nNumber of loans in the queue: "+debtList.size());
-					
-					Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
-					l.repaid = false;
-					
-					// Print the status:
-					System.out.print(("Loan "+l).substring(25)+" is selected:");
-					System.out.print(" Borrower: bank "+l.borrower.title);
-					System.out.print(", Lender: bank "+l.lender.title);
-					
-					Bank bb = l.borrower;
-					boolean handled = b.repayLoan(l);
-					if (handled) {
-						
-						// Print the status:
-						System.out.println("	Loan is handled.");
-					} else {
-						debtList.add(l); // Add the loan to the end of the queue.
-						
-						// Print the status:
-						System.out.println("	Loan is moved to the end of the queue.");
-					}
-				}
-			}*/
 		}
 		
 		// Print the status:
@@ -937,70 +862,7 @@ public class Simulator implements ContextBuilder<Object> {
 			if (b.liquidityExcessDeficit < 0 && b.securities > 0) {
 				b.refinanceByCentralBank(-b.liquidityExcessDeficit);
 			}
-			
-/*a*/			repayOverdueLoans(b);
-			/*long firstOverdueLoan = b.borrowingList.stream()
-					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
-					.count();
-			if (firstOverdueLoan > 0) {
-				
-				// Print the status:
-				System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
-
-				//for (Loan l : b.borrowingList) {
-				for (int i = 0; i < firstOverdueLoan; i++) {
-					Loan l = b.borrowingList.stream().findFirst().get();
-					if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
-						b.repayLoan(l);
-					}
-				}
-			}
-			long secondOverdueLoan = b.borrowingList.stream()
-					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
-					.count();
-			
-			if (secondOverdueLoan < firstOverdueLoan) {
-				
-				// Print the status:
-				System.out.println("Other banks tried to repay their overdue loans...");
-
-				debtList.clear();
-				for (Bank bb : bankList) {
-					b.borrowingList.stream().forEach(x -> {
-						Loan l = (Loan) x;
-						if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
-							debtList.add(l);
-						}
-					});
-				}
-				
-				while (debtList.size() > 0) {
-					
-					// Print the status:
-					System.out.println("\nNumber of loans in the queue: "+debtList.size());
-					
-					Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
-					l.repaid = false;
-					
-					// Print the status:
-					System.out.print(("Loan "+l).substring(25)+" is selected:");
-					System.out.print(" Borrower: bank "+l.borrower.title);
-					System.out.print(", Lender: bank "+l.lender.title);
-					
-					Bank bb = l.borrower;
-					boolean handled = b.repayLoan(l);
-					if (handled) {
-						
-						// Print the status:
-						System.out.println("	Loan is handled.");
-					} else {
-						debtList.add(l); // Add the loan to the end of the queue.
-						
-						// Print the status:
-						System.out.println("	Loan is moved to the end of the queue.");
-					}
-				}
-			}*/
+			repayOverdueLoans(b);
 		}
 		
 		// Print the status:
@@ -1015,83 +877,29 @@ public class Simulator implements ContextBuilder<Object> {
 				double lossPercent = RandomHelper.nextDoubleFromTo(0, maxLossPercent);
 				b.fireSale(-b.liquidityExcessDeficit, lossPercent);
 			}
-			
-/*a*/			repayOverdueLoans(b);
-			/*long firstOverdueLoan = b.borrowingList.stream()
-					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
-					.count();
-			if (firstOverdueLoan > 0) {
-				
-				// Print the status:
-				System.out.println("Bank "+b.title+" tried to repay its overdue loan...");
-
-				//for (Loan l : b.borrowingList) {
-				for (int i = 0; i < firstOverdueLoan; i++) {
-					Loan l = b.borrowingList.stream().findFirst().get();
-					if (l != null && (l.defaulted || l.payAtEOD) && !l.repaid) {
-						b.repayLoan(l);
-					}
-				}
-			}
-			long secondOverdueLoan = b.borrowingList.stream()
-					.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
-					.count();
-			
-			if (secondOverdueLoan < firstOverdueLoan) {
-				
-				// Print the status:
-				System.out.println("Other banks tried to repay their overdue loans...");
-
-				debtList.clear();
-				for (Bank bb : bankList) {
-					b.borrowingList.stream().forEach(x -> {
-						Loan l = (Loan) x;
-						if ((l.defaulted || l.payAtEOD) && !l.repaid) { // Find all overdue loans.
-							debtList.add(l);
-						}
-					});
-				}
-				
-				while (debtList.size() > 0) {
-					
-					// Print the status:
-					System.out.println("\nNumber of loans in the queue: "+debtList.size());
-					
-					Loan l = debtList.remove(); // Consider and remove the first loan from the head of the queue.
-					l.repaid = false;
-					
-					// Print the status:
-					System.out.print(("Loan "+l).substring(25)+" is selected:");
-					System.out.print(" Borrower: bank "+l.borrower.title);
-					System.out.print(", Lender: bank "+l.lender.title);
-					
-					Bank bb = l.borrower;
-					boolean handled = b.repayLoan(l);
-					if (handled) {
-						
-						// Print the status:
-						System.out.println("	Loan is handled.");
-					} else {
-						debtList.add(l); // Add the loan to the end of the queue.
-						
-						// Print the status:
-						System.out.println("	Loan is moved to the end of the queue.");
-					}
-				}
-			}*/
+			repayOverdueLoans(b);
 		}
 		
 		// Print the status:
 		System.out.println("Tick #"+t
 				+", Step 12, OK: All potential firesales and overdue loan repayments were simulated.");
 		
-		// 13- At the end-of-day, a bank goes bankrupt if it fails to make up for its liquidity deficit
+		// 13- At the end-of-day, the position of banks will be determined.
+		for (Bank b : bankList) {
+			b.determinePosition();
+		}
+		
+		// Print the status:
+		System.out.println("Tick #"+t
+				+", Step 13, OK: All banks' positions were determined.");
+		
+		// 14- At the end-of-day, a bank goes bankrupt if it fails to make up for its liquidity deficit
 		//     or its equity is zero or less and does not compensate these problems by raising its equity.
 		//     Bankruptcy of a bank also leads to losses resulting from its zero debt to the banks from which
 		//     it has borrowed.
 		
 		// Print the status:
-		System.out.println("Tick #"+t+", Step 13, OK: Banks' failure were checked...");
+		System.out.println("Tick #"+t+", Step 14, OK: Banks' failure were checked...");
 		
 		for (Bank b : bankList) {
 			if (b.equity <= 0 || b.liquidityExcessDeficit < 0) {
