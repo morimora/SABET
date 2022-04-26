@@ -4,14 +4,20 @@
 package net.sabet.simulation;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Scanner;
 import java.util.Stack;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,7 +57,7 @@ import org.jgrapht.graph.DefaultWeightedEdge;
 
 public class Simulator implements ContextBuilder<Object> {
 
-	int bankCount = 401;
+	static int bankCount = 413;
 	int counterpartyMax = 20;
 	public static double capitalAdequacyRatio = 0.08;
 	public static double leverageRatio = 0.03;
@@ -77,13 +83,13 @@ public class Simulator implements ContextBuilder<Object> {
 	public static double cashlessPayment = 0.009;
 	
 	double smallBanksShare = 0.15;
-	public static double smallBanksMean = 9640.741;
+	public static double smallBanksMean = 8762.341;
 	
 	double mediumBanksShare = 0.25;
-	public static double mediumBanksMean = 16100.038;
+	public static double mediumBanksMean = 14633.110;
 	
 	double largeBanksShare = 0.60;
-	public static double largeBanksMean = 35670.742;
+	public static double largeBanksMean = 32420.663;
 	
 	public static boolean blockchainON = false;
 	public static int economicGrowthScenario = 0;
@@ -91,18 +97,25 @@ public class Simulator implements ContextBuilder<Object> {
 
 	// Balance sheet coefficients for banks:
 	public static double[][] balanceSheetShare = {
+			//Rsrv, BScrt, Scrt, CCrdt, IBClm, OAsst, Eqt,  CBFnd, CTDpst, CCAcnt, IBFnd, OLblt
+			{ 0.08, 0.0,   0.10, 0.33,  0.09,  0.40,  0.13, 0.0,   0.16,   0.16,   0.08,  0.46}, // Small banks
+			{ 0.04, 0.0,   0.08, 0.36,  0.18,  0.35,  0.09, 0.0,   0.16,   0.16,   0.16,  0.43}, // Medium banks
+			{ 0.04, 0.0,   0.05, 0.30,  0.45,  0.16,  0.04, 0.0,   0.14,   0.14,   0.40,  0.27}  // Large banks
+		};
+	/*public static double[][] balanceSheetShare = {
 			//	Rsrv,	BScrt,	Scrt,	CCrdt,	IBClm,	Eqt,	CBFnd,	CTDpst,	CCAcnt, IBFnd
 			{	0.10,	0.0,	0.20,	0.65,	0.05,	0.15,	0.0,	0.40,	0.40,	0.05	},	// Small banks
 			{	0.05,	0.0,	0.15,	0.70,	0.10,	0.10,	0.0,	0.40,	0.40,	0.10	},	// Medium banks
 			{	0.05,	0.0,	0.10,	0.60,	0.25,	0.05,	0.0,	0.35,	0.35,	0.25	}	// Large banks
-		};
+		};*/
 	
 	// Noises for different economic cycles:
 	double[][] uncertaintyNoise = {
 			//	GrwthL,	GrwthH,	DclnL,	DclnH,	RcssnL,	RcssnH
-			{	0.0,	0.005,	0.05,	0.10,	0.10,	0.25	},	// Credits
+			{	0.0,	0.005,	0.05,	0.10,	0.10,	0.25	},	// Credits & IB loans
 			{	0.0,	0.003,	0.03,	0.06,	0.06,	0.15	},	// Term deposits
-			{	0.0,	0.003,	0.03,	0.06,	0.06,	0.15	}	// Payments
+			{	0.0,	0.003,	0.03,	0.06,	0.06,	0.15	},	// Payments
+			{	0.0,	0.005,	0.05,	0.10,	0.10,	0.25	}	// Other assets & liabilities
 		};
 	
 	public static ArrayList<Bank> bankList = new ArrayList<>();
@@ -113,6 +126,10 @@ public class Simulator implements ContextBuilder<Object> {
 	public static List<Bank> largeLenders;
 
 	public static Context<Object> context;
+	public static Graph<Object, DefaultWeightedEdge> immGraph =
+			new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
+	
+	private static final int simulationThreads = 10;
 	
 	@Override
 	public Context build(Context<Object> context) {
@@ -163,25 +180,128 @@ public class Simulator implements ContextBuilder<Object> {
 		System.out.println("The results of the initiation step:");
 		System.out.println("-----------------------------------");
 
+		// Initiation: Read data from the initiation file.
+		List<String[]> initTypes = new ArrayList<String[]>();
+		List<double[]> initBalances = new ArrayList<double[]>();
+		
+		try {
+			Scanner sc = new Scanner(new File("./data/init.csv"));
+			String fRecord = "";
+			while (sc.hasNext()) {
+				fRecord = sc.nextLine();
+				String[] records = fRecord.split(",");
+				initTypes.add(Arrays.copyOfRange(records, 0, 2));
+				initBalances.add(Arrays.stream(Arrays.copyOfRange(records, 2, 15))
+						.mapToDouble(Double::parseDouble)
+						.toArray());
+			}
+			sc.close();
+		} catch (FileNotFoundException e1) {
+			e1.printStackTrace();
+		}
+
 		// Initiation: Create banks.
 		for (int i = 0; i < bankCount; i++) {
 			Bank bank = new Bank();
 			
-			// Determine bank size.
-			if (i >= Math.round(bankCount * largeBanksShare) - 1) {
+			// Determine banks' size.
+			switch (initTypes.get(i)[0]) {
+				case "Large": bank.size = BankSize.Large;
+					break;
+				case "Small": bank.size = BankSize.Small;
+					break;
+				case "Medium": bank.size = BankSize.Medium;
+					break;
+			}
+			/*if (i >= Math.round(bankCount * largeBanksShare) - 1) {
 				bank.size = BankSize.Large;
 			} else if (i <= Math.round(bankCount * smallBanksShare) - 1) {
 				bank.size = BankSize.Small;
 			} else {
 				bank.size = BankSize.Medium;
-			}
+			}*/
 			
+			// Assign banks' balance sheet.
+			bank.securities = initBalances.get(i)[1] * 1000;
+			bank.clientCredits = initBalances.get(i)[2] * 1000;
+			bank.interbankClaims = initBalances.get(i)[3] * 1000;
+			bank.cashAndCentralBankDeposit = initBalances.get(i)[4] * 1000;
+			bank.pledgedSecurities = initBalances.get(i)[5] * 1000;
+			bank.otherAssets = initBalances.get(i)[6] * 1000;
+			
+			bank.equity = initBalances.get(i)[7] * 1000;
+			bank.clientTermDeposits = initBalances.get(i)[8] * 1000;
+			bank.clientDemandDeposits = initBalances.get(i)[9] * 1000;
+			bank.interbankFunds = initBalances.get(i)[10] * 1000;
+			bank.centralBankFunds = initBalances.get(i)[11] * 1000;
+			bank.otherLiabilities = initBalances.get(i)[12] * 1000;
+			
+			bank.liquidityExcessDeficit = 0.0;
+			
+			// Determine the uncertainty of banks.
+			switch (economicGrowthScenario) {
+				case 0:	bank.cUncertainty =
+								RandomHelper.nextDoubleFromTo(0, assetsNoise);
+						bank.lUncertainty =
+								RandomHelper.nextDoubleFromTo(0, assetsNoise);
+						bank.dUncertainty =
+								RandomHelper.nextDoubleFromTo(0, assetsNoise);
+						bank.pUncertainty =
+								RandomHelper.nextDoubleFromTo(0, assetsNoise);
+						bank.alUncertainty =
+								RandomHelper.nextDoubleFromTo(0, assetsNoise);
+					break;
+				case 1:	bank.cUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][0],uncertaintyNoise[0][1]);
+						bank.lUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][0], uncertaintyNoise[0][1]);
+						bank.dUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][0], uncertaintyNoise[1][1]);
+						bank.pUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][0], uncertaintyNoise[2][1]);
+						bank.alUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[3][0], uncertaintyNoise[3][1]);
+					break;
+				case 2:	bank.cUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][2], uncertaintyNoise[0][3]);
+						bank.lUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][2], uncertaintyNoise[0][3]);
+						bank.dUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][2], uncertaintyNoise[1][3]);
+						bank.pUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][2], uncertaintyNoise[2][3]);
+						bank.alUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[3][2], uncertaintyNoise[3][3]);
+					break;
+				case 3:	bank.cUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][4], uncertaintyNoise[0][5]);
+						bank.lUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[0][4], uncertaintyNoise[0][5]);
+						bank.dUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[1][4], uncertaintyNoise[1][5]);
+						bank.pUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[2][4], uncertaintyNoise[2][5]);
+						bank.alUncertainty =
+								RandomHelper.nextDoubleFromTo(uncertaintyNoise[3][4], uncertaintyNoise[3][5]);
+					break;
+			}
+					
 			context.add(bank);
 			bankList.add(bank);
+			
+			// Print the status:
+			System.out.println("Bank "+bank.title+" and its balance sheet valuses were were initiated.");
+		}
+		
+		// In this version we assume no initial lending relationships among the banks.
+		for (Bank b : bankList) {
+			b.cashAndCentralBankDeposit =+ b.interbankClaims + b.interbankFunds;
+			b.interbankClaims = 0.0;
+			b.interbankFunds = 0.0;
 		}
 		
 		// Determine the uncertainty of banks.
-		for (Bank b : bankList) {
+		/*for (Bank b : bankList) {
 			switch (economicGrowthScenario) {
 			case 0:	b.cUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
 					b.lUncertainty = RandomHelper.nextDoubleFromTo(0, assetsNoise);
@@ -207,7 +327,7 @@ public class Simulator implements ContextBuilder<Object> {
 			
 			// Print the status:
 			System.out.println("Bank "+b.title+" was initiated.");
-		}
+		}*/
 			
 		// Initiation: Create the central bank.
 		CentralBank centralBank = new CentralBank();
@@ -255,10 +375,8 @@ public class Simulator implements ContextBuilder<Object> {
 			}
 		}
 		
-		// Initiation: Create random counterparts for banks and Assign their initial assets and liabilities.
+		// Initiation: Create random counterparts for banks.
 		for (Bank b : bankList) {
-			
-			// Initiation: Create random counterparts for each bank.
 			int randomMax = RandomHelper.nextIntFromTo(1, counterpartyMax);
 			Integer randomIndex[] = {};
 			List<Integer> indexList = new ArrayList<Integer>(Arrays.asList(randomIndex));
@@ -303,7 +421,7 @@ public class Simulator implements ContextBuilder<Object> {
 					});
 			
 			// Initiation: Assign initial assets and liabilities to each bank.
-			int size;
+			/*int size;
 			double totAssetsMean, totAssetsStdDev;
 			if (b.size == BankSize.Small) {
 				size = 0;
@@ -331,17 +449,17 @@ public class Simulator implements ContextBuilder<Object> {
 			b.centralBankFunds = totAssets * balanceSheetShare[size][6];
 			b.clientTermDeposits = totAssets * balanceSheetShare[size][7];
 			b.clientDemandDeposits = totAssets * balanceSheetShare[size][8];
-			b.interbankFunds = totAssets * balanceSheetShare[size][9];
+			b.interbankFunds = 0.0;//totAssets * balanceSheetShare[size][9];
 			b.cashAndCentralBankDeposit += totAssets * balanceSheetShare[size][4];
 			
 			// Print the status:
 			System.out.println("Balance sheet items of bank "+b.title+" were assigned.\n");
 			
-			b.liquidityExcessDeficit = 0.0;
+			b.liquidityExcessDeficit = 0.0;*/
 		}
 		
 		// Initiation: Calculate and assign interbank loans.
-		for (Bank b : bankList.stream().filter(x -> x.interbankFunds > 0).collect(Collectors.toList())) {
+		/*for (Bank b : bankList.stream().filter(x -> x.interbankFunds > 0).collect(Collectors.toList())) {
 			Bank l = (b.counterpartyList.stream()
 						.filter(x -> CounterpartyType.Borrowing.equals(x.getType()))
 						.findAny()
@@ -360,10 +478,10 @@ public class Simulator implements ContextBuilder<Object> {
 				t.printStackTrace();
 				b.interbankFunds -= fund;
 			}
-		}
+		}*/
 		
 		// Print the status:
-		for (Bank b : bankList) {
+		/*for (Bank b : bankList) {
 			System.out.println("\nInitial interbank transactions of bank "+b.title+":");
 			System.out.println("Interbank claims (lending to other banks): "+b.interbankClaims);
 			b.counterpartyList.stream()
@@ -389,11 +507,11 @@ public class Simulator implements ContextBuilder<Object> {
 									System.out.println("		Borrowed amount: "+w.amount);
 								});
 					});
-		}
+		}*/
 
 		// Initiation: Update banks' balance sheet based on their interbank claims and funds.
 		for (Bank b : bankList) {
-			double[] lastBS = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+			double[] lastBS = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 			b.calculateLiquidity(lastBS);
 			b.cashAndCentralBankDeposit += b.liquidityExcessDeficit;
 			b.liquidityExcessDeficit = 0.0;
@@ -420,16 +538,25 @@ public class Simulator implements ContextBuilder<Object> {
 					+" | "+StringUtils.rightPad(b.clientDemandDeposits+" :CCAcnt", 30, " "));
 			System.out.println(StringUtils.leftPad("IBClm: "+b.interbankClaims, 30, " ")
 					+" | "+StringUtils.rightPad(b.interbankFunds+" :IBFnd", 30, " "));
+			System.out.println(StringUtils.leftPad("OAsst: "+b.otherAssets, 30, " ")
+					+" | "+StringUtils.rightPad(b.otherLiabilities+" :OLblt", 30, " "));
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("t-Ast: "+(b.cashAndCentralBankDeposit
-					+b.pledgedSecurities+b.securities+b.clientCredits+b.interbankClaims), 30, " ")
+					+b.pledgedSecurities+b.securities+b.clientCredits+b.interbankClaims+b.otherAssets), 30, " ")
 					+" | "+StringUtils.rightPad((b.equity+b.centralBankFunds+b.clientTermDeposits
-					+b.clientDemandDeposits+b.interbankFunds)+" :t-Lbl", 30, " "));
+					+b.clientDemandDeposits+b.interbankFunds+b.otherLiabilities)+" :t-Lbl", 30, " "));
 		}
 		
 		// Simulation: Simulate each tick.
 		RunEnvironment.getInstance().getCurrentSchedule().schedule(
-				ScheduleParameters.createRepeating(1, 1, ScheduleParameters.LAST_PRIORITY), () -> simulateTicks());
+				ScheduleParameters.createRepeating(1, 1, ScheduleParameters.LAST_PRIORITY), () -> {
+					try {
+						simulateTicks();
+					} catch (NoSuchMethodException | SecurityException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				});
 
 		this.context = context;
 		return context;
@@ -554,7 +681,7 @@ public class Simulator implements ContextBuilder<Object> {
 	}
 	
 	// This method tries to repay the overdue loans of one bank as well as the overdue loans of other related banks.
-	private void repayOverdueLoans (Bank b) {
+	static void repayOverdueLoans (Bank b) {
 		Queue<Loan> debtList = new LinkedList<Loan>();
 		long firstOverdueLoan = b.borrowingList.stream()
 				.filter(x -> (x.defaulted || x.payAtEOD) && !x.repaid)
@@ -621,33 +748,39 @@ public class Simulator implements ContextBuilder<Object> {
 	}
 	
 	// This method finds all paths between the two nodes 'source' and 'target' in the graph.
-	public static List<GraphPath<Object, DefaultWeightedEdge>> findAllPaths(Object source, Object target) {
+	/*public static List<GraphPath<Object, DefaultWeightedEdge>> findAllPaths(Object source, Object target) {
 		
-		Network<Object> network = (Network<Object>) context.getProjection("IMM network");
-		
-		// Make a JGraphT graph based on the IMM network.
-		Graph<Object, DefaultWeightedEdge> g = new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
-		network.getNodes().forEach(v -> g.addVertex(v));
-		network.getNodes().forEach(s -> network.getSuccessors(s)
-				.forEach(t -> g.addEdge(s, t)));
-		network.getNodes().forEach(s -> network.getSuccessors(s)
-				.forEach(t -> g.setEdgeWeight(s, t, network.getEdge(s, t).getWeight())));
-		
-		// Find all directed paths from the source to the target.
-		AllDirectedPaths<Object, DefaultWeightedEdge> p = new AllDirectedPaths<>(g);
+		AllDirectedPaths<Object, DefaultWeightedEdge> p = new AllDirectedPaths<>(immGraph);
 		List<GraphPath<Object, DefaultWeightedEdge>> allPaths = new ArrayList<>();
-		allPaths = p.getAllPaths(source, target, true, null);
+		try {
+			allPaths = p.getAllPaths(source, target, true, null);
+		} catch (Exception e) {
+			// TODO: handle exception
+			return null;
+		}
 		
 		return allPaths;
-	}
+	}*/
 	
-	//This method manages the work flow of simulations for all banks.
-	public void simulateTicks() {
+	//This method manages the workflow of simulations for all banks.
+	@SuppressWarnings("null")
+	public void simulateTicks() throws NoSuchMethodException, SecurityException {
 		
 		int t = (int) RunEnvironment.getInstance().getCurrentSchedule().getTickCount();
 		Stream<Object> stBank = context.getObjectsAsStream(Bank.class);
 		bankList.clear();
-		double[][] lastBalanceSheet = new double[bankCount][10];
+		double[][] lastBalanceSheet = new double[bankCount][12];
+		
+		Method method;
+		Object[] args = new Object[1];
+		Runnable runnable;
+		
+		Network<Object> network = (Network<Object>) context.getProjection("IMM network");
+		
+		// Make a JGraphT graph based on the IMM network.
+		network.getNodes().forEach(v -> immGraph.addVertex(v));
+		network.getEdges().forEach(e -> immGraph.addEdge(e.getSource(), e.getTarget()));
+		network.getEdges().forEach(e -> immGraph.setEdgeWeight(e.getSource(), e.getTarget(), e.getWeight()));
 		
 		// Print the status:
 		System.out.println("\nThe results of the simulation of Tick #"+t+":");
@@ -664,11 +797,13 @@ public class Simulator implements ContextBuilder<Object> {
 			lastBalanceSheet[idx][2] = b.securities;
 			lastBalanceSheet[idx][3] = b.clientCredits;
 			lastBalanceSheet[idx][4] = b.interbankClaims;
-			lastBalanceSheet[idx][5] = b.equity;
-			lastBalanceSheet[idx][6] = b.centralBankFunds;
-			lastBalanceSheet[idx][7] = b.clientTermDeposits;
-			lastBalanceSheet[idx][8] = b.clientDemandDeposits;
-			lastBalanceSheet[idx][9] = b.interbankFunds;
+			lastBalanceSheet[idx][5] = b.otherAssets;
+			lastBalanceSheet[idx][6] = b.equity;
+			lastBalanceSheet[idx][7] = b.centralBankFunds;
+			lastBalanceSheet[idx][8] = b.clientTermDeposits;
+			lastBalanceSheet[idx][9] = b.clientDemandDeposits;
+			lastBalanceSheet[idx][10] = b.interbankFunds;
+			lastBalanceSheet[idx][11] = b.otherLiabilities;
 			
 			b.liquidityExcessDeficit = 0.0;
 		});
@@ -687,10 +822,9 @@ public class Simulator implements ContextBuilder<Object> {
 		System.out.println("Tick #"+t+", Step 0, OK: The values of the balance sheets from the last tick were retrieved.");
 
 		// 1- Clients' term deposits are changed.
-		
 		for (Bank b : bankList) {
 			int idx = bankList.indexOf(b);
-			double lastClientTermDeposits = lastBalanceSheet[idx][7];
+			double lastClientTermDeposits = lastBalanceSheet[idx][8];
 			b.updateClientTermDeposits(lastClientTermDeposits);
 		}
 		
@@ -715,7 +849,7 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("Tick #"+t+", Step 3, OK: Banks updated payments of their clients.");
 		
-		// 4. Banks use their reserve balance to settle their clearing vector.
+		// 4- Banks use their reserve balance to settle their clearing vector.
 		for (Bank b : bankList) {
 			b.settlePayments(centralBank.clearingMatrix);
 		}
@@ -723,7 +857,19 @@ public class Simulator implements ContextBuilder<Object> {
 		// Print the status:
 		System.out.println("Tick #"+t+", Step 4, OK: Settlement of payments was done by the central bank.");
 
-		// 5- Banks repay those interbank debts that have matured by their "cash and central bank deposit".
+		// 5- Banks change their other assets and liabilities.
+		for (Bank b : bankList) {
+			int idx = bankList.indexOf(b);
+			double lastOtherAssets = lastBalanceSheet[idx][5];
+			double lastOtherLiabilities = lastBalanceSheet[idx][11];
+			b.updateOtherAssets(lastOtherAssets);
+			b.updateOtherLiabilities(lastOtherLiabilities, lastOtherAssets);
+		}
+		
+		// Print the status:
+		System.out.println("Tick #"+t+", Step 5, OK: Banks updated their other assets and liabilities.");
+
+		// 6- Banks repay those interbank debts that have matured by their "cash and central bank deposit".
 		//    They update their borrowing list and lending list.
 		//    Also, lenders evaluate their counterparts and update their counterparty list.
 		//    In order to repay their loans, banks that need to receive amounts lent to other banks
@@ -741,7 +887,7 @@ public class Simulator implements ContextBuilder<Object> {
 		}
 		
 		// Print the status:
-		System.out.println("Tick #"+t+", Step 5, Loan repayment's simulation strated...");
+		System.out.println("Tick #"+t+", Step 6, Loan repayment's simulation strated...");
 		
 		while (debtList.size() > 0) {
 			
@@ -771,13 +917,13 @@ public class Simulator implements ContextBuilder<Object> {
 		}
 		
 		// Print the status:
-		System.out.println("\nTick #"+t+", Step 5, OK: All loan repayments were finished.");
+		System.out.println("\nTick #"+t+", Step 6, OK: All loan repayments were finished.");
 
-		// 6- Banks calculate their liquidity excess or deficit. They must comply with the liquidity coverage ratio.
+		// 7- Banks calculate their liquidity excess or deficit. They must comply with the liquidity coverage ratio.
 		for (Bank b : bankList) {
 			int idx = bankList.indexOf(b);
-			double[] lastBS = new double[10];
-			for (int i = 0; i < 10; i++) {
+			double[] lastBS = new double[12];
+			for (int i = 0; i < 12; i++) {
 				lastBS[i] = lastBalanceSheet[idx][i];
 			}
 			b.calculateLiquidity(lastBS);
@@ -785,9 +931,9 @@ public class Simulator implements ContextBuilder<Object> {
 		}
 		
 		// Print the status:
-		System.out.println("Tick #"+t+", Step 6, OK: Banks' liquidity excess and deficit were calculated.\n");
+		System.out.println("Tick #"+t+", Step 7, OK: Banks' liquidity excess and deficit were calculated.\n");
 		
-		// 7- Banks provision their reserve and update their liquidity excess/deficit.
+		// 8- Banks provision their reserve and update their liquidity excess/deficit.
 		//    Overdue loans are taken into account in liquidity excess/deficit calculations.
 		for (Bank b : bankList) {
 			b.provisionReserve();
@@ -797,9 +943,9 @@ public class Simulator implements ContextBuilder<Object> {
 		}
 	
 		// Print the status:
-		System.out.println("\nTick #"+t+", Step 7, OK: Banks' reserve provisioning calculations were done.\n");
+		System.out.println("\nTick #"+t+", Step 8, OK: Banks' reserve provisioning calculations were done.\n");
 		
-		// 8- Banks that have liquidity excess pay part of their surplus to buy securities.
+		// 9- Banks that have liquidity excess pay part of their surplus to buy securities.
 		//    They must comply with the authorized limit for the purchase of securities.
 		for (Bank b : bankList) {
 			if (b.liquidityExcessDeficit > 0) {
@@ -809,42 +955,71 @@ public class Simulator implements ContextBuilder<Object> {
 			// Print the status:
 			int idx = bankList.indexOf(b);
 			System.out.println("Securities invested (+) or firesaled (-) by bank "
-					+b.title+": "+(b.securities-lastBalanceSheet[idx][2]+b.pledgedSecurities-lastBalanceSheet[idx][1]));
+					+b.title+": "
+					+(b.securities-lastBalanceSheet[idx][2]+b.pledgedSecurities-lastBalanceSheet[idx][1]));
 		}
 		
 		// Print the status:
-		System.out.println("\nTick #"+t+", Step 8, OK: Banks' investment in new securities were done.");
+		System.out.println("\nTick #"+t+", Step 9, OK: Banks' investment in new securities were done.");
 		
-		// 9- Banks first borrow from or lend to their counterparts based on their history and reserve.
-		//    Borrowers send their request to lenders based on lenders' good history.
-		//    Lenders respond to the received requests based on their excess and borrowers' good history.
-		//    If counterparts do not meet the banks' need or excess, the borrowing banks send their request
-		//    to other banks, and the lending banks may accept these requests with stricter conditions.
-		//    They must also comply with both capital adequacy and leverage ratios on loans.
-		//    Moreover, borrowers evaluate their counterparts and update their counterparty list.
-		//    After being made up, borrowers try to repay their overdue loans once again, if relevant.
+		// 10- Banks first borrow from or lend to their counterparts based on their history and reserve.
+		//     Borrowers send their request to lenders based on lenders' good history.
+		//     Lenders respond to the received requests based on their excess and borrowers' good history.
+		//     If counterparts do not meet the banks' need or excess, the borrowing banks send their request
+		//     to other banks, and the lending banks may accept these requests with stricter conditions.
+		//     They must also comply with both capital adequacy and leverage ratios on loans.
+		//     Moreover, borrowers evaluate their counterparts and update their counterparty list.
+		//     After being made up, borrowers try to repay their overdue loans once again, if relevant.
 		
 		// Print the status:
-		System.out.println("Tick #"+t+", Step 9, Lending simulation strated...\n");
+		System.out.println("Tick #"+t+", Step 10, Lending simulation strated...\n");
 		
+		bankList.stream()
+				.forEach(b -> {
+					double firstLiquidity = b.liquidityExcessDeficit;
+					if (b.liquidityExcessDeficit < 0) {
+						b.requestLoanCounterpart(-b.liquidityExcessDeficit);
+					}
+					if (b.liquidityExcessDeficit < 0) {
+						b.requestLoanNonCounterpart(-b.liquidityExcessDeficit);
+					}
+					double secondLiquidity = b.liquidityExcessDeficit;
+					if (secondLiquidity > firstLiquidity) {
+						repayOverdueLoans(b);
+					}
+				});
+		
+		/*ExecutorService executor = Executors.newCachedThreadPool();//.newFixedThreadPool(simulationThreads);
 		for (Bank b : bankList) {
 			double firstLiquidity = b.liquidityExcessDeficit;
 			if (b.liquidityExcessDeficit < 0) {
-				b.requestLoanCounterpart(-b.liquidityExcessDeficit);
+				//b.requestLoanCounterpart(-b.liquidityExcessDeficit);
+				method = Bank.class.getMethod("requestLoanCounterpart", double.class);
+				args[0] = -b.liquidityExcessDeficit;
+				runnable = new SimulatorRunnable(b, method, args);
+				executor.execute(runnable);
 			}
 			if (b.liquidityExcessDeficit < 0) {
-				b.requestLoanNonCounterpart(-b.liquidityExcessDeficit);
+				//b.requestLoanNonCounterpart(-b.liquidityExcessDeficit);
+				method = Bank.class.getMethod("requestLoanNonCounterpart", double.class);
+				args[0] = -b.liquidityExcessDeficit;
+				runnable = new SimulatorRunnable(b, method, args);
+				executor.execute(runnable);
 			}
 			double secondLiquidity = b.liquidityExcessDeficit;
 			if (secondLiquidity > firstLiquidity) {
 				repayOverdueLoans(b);
 			}
-		}
+		}*/
+		/*executor.shutdown();
+		while (!executor.isTerminated()) {
+			
+		}*/
 		
 		// Print the status:
-		System.out.println("\nTick #"+t+", Step 9, OK: All new loans and overdue loan repayments were simulated.");
+		System.out.println("\nTick #"+t+", Step 10, OK: All new loans and overdue loan repayments were simulated.");
 		
-		// 10- Banks repay their central bank debt with the rest of their liquidity surplus.
+		// 11- Banks repay their central bank debt with the rest of their liquidity surplus.
 		for (Bank b : bankList) {
 			if (b.liquidityExcessDeficit > 0 && b.centralBankFunds > 0) {
 				b.repayCentralBankLoan();
@@ -853,9 +1028,9 @@ public class Simulator implements ContextBuilder<Object> {
 		
 		// Print the status:
 		System.out.println("Tick #"+t
-				+", Step 10, OK: All potential repayments of the previous central bank refinances were done.");
+				+", Step 11, OK: All potential repayments of the previous central bank refinances were done.");
 		
-		// 11- Banks that have not been able to make up their liquidity deficit in the market will be refinanced
+		// 12- Banks that have not been able to make up their liquidity deficit in the market will be refinanced
 		//     by the central bank if they have enough securities.
 		//     After being made up, borrowers try to repay their overdue loans once again, if relevant.
 		for (Bank b : bankList) {
@@ -867,9 +1042,9 @@ public class Simulator implements ContextBuilder<Object> {
 		
 		// Print the status:
 		System.out.println("Tick #"+t
-				+", Step 11, OK: All potential central bank refinances and overdue loan repayments were simulated.");
+				+", Step 12, OK: All potential central bank refinances and overdue loan repayments were simulated.");
 		
-		// 12- Banks that cannot make up for their lack of liquidity, either through interbank loans
+		// 13- Banks that cannot make up for their lack of liquidity, either through interbank loans
 		//     or through central bank refinancing, will have to fire sell.
 		//     After being made up, borrowers try to repay their overdue loans once again, if relevant.
 		for (Bank b : bankList) {
@@ -882,24 +1057,24 @@ public class Simulator implements ContextBuilder<Object> {
 		
 		// Print the status:
 		System.out.println("Tick #"+t
-				+", Step 12, OK: All potential firesales and overdue loan repayments were simulated.");
+				+", Step 13, OK: All potential firesales and overdue loan repayments were simulated.");
 		
-		// 13- At the end-of-day, the position of banks will be determined.
+		// 14- At the end-of-day, the position of banks will be determined.
 		for (Bank b : bankList) {
 			b.determinePosition();
 		}
 		
 		// Print the status:
 		System.out.println("Tick #"+t
-				+", Step 13, OK: All banks' positions were determined.");
+				+", Step 14, OK: All banks' positions were determined.");
 		
-		// 14- At the end-of-day, a bank goes bankrupt if it fails to make up for its liquidity deficit
+		// 15- At the end-of-day, a bank goes bankrupt if it fails to make up for its liquidity deficit
 		//     or its equity is zero or less and does not compensate these problems by raising its equity.
 		//     Bankruptcy of a bank also leads to losses resulting from its zero debt to the banks from which
 		//     it has borrowed.
 		
 		// Print the status:
-		System.out.println("Tick #"+t+", Step 14, OK: Banks' failure were checked...");
+		System.out.println("Tick #"+t+", Step 15, OK: Banks' failure were checked...");
 		
 		for (Bank b : bankList) {
 			if (b.equity <= 0 || b.liquidityExcessDeficit < 0) {
@@ -907,6 +1082,10 @@ public class Simulator implements ContextBuilder<Object> {
 				if (dice <= bankruptcyLikelihood) {
 					b.goBankrupt();
 					//bankList.remove(b);
+					
+					//Update immGraph.
+					immGraph.removeVertex(b);
+					
 					context.remove(b);
 					
 					// Print the status:
@@ -932,11 +1111,13 @@ public class Simulator implements ContextBuilder<Object> {
 					+" | "+StringUtils.rightPad(b.clientDemandDeposits+" :CCAcnt", 30, " "));
 			System.out.println(StringUtils.leftPad("IBClm: "+b.interbankClaims, 30, " ")
 					+" | "+StringUtils.rightPad(b.interbankFunds+" :IBFnd", 30, " "));
+			System.out.println(StringUtils.leftPad("OAsst: "+b.otherAssets, 30, " ")
+					+" | "+StringUtils.rightPad(b.otherLiabilities+" :OLblt", 30, " "));
 			System.out.println("-------------------------------|-------------------------------");
 			System.out.println(StringUtils.leftPad("t-Ast: "+(b.cashAndCentralBankDeposit
-					+b.pledgedSecurities+b.securities+b.clientCredits+b.interbankClaims), 30, " ")
+					+b.pledgedSecurities+b.securities+b.clientCredits+b.interbankClaims+b.otherAssets), 30, " ")
 					+" | "+StringUtils.rightPad((b.equity+b.centralBankFunds+b.clientTermDeposits
-					+b.clientDemandDeposits+b.interbankFunds)+" :t-Lbl", 30, " "));
+					+b.clientDemandDeposits+b.interbankFunds+b.otherLiabilities)+" :t-Lbl", 30, " "));
 		}
 	}
 }

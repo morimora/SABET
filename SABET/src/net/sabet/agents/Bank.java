@@ -7,9 +7,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.Stack;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -105,6 +112,109 @@ public class Bank extends EcoAgent {
 		}
 	}
 	
+	/*public class trustCalculatorCallable implements Callable<Double[]> {
+
+		private final GraphPath<Object, DefaultWeightedEdge> path;
+		private final Graph<Object, DefaultWeightedEdge> lendingGraph;
+		
+		trustCalculatorCallable(
+				GraphPath<Object, DefaultWeightedEdge> path,
+				Graph<Object, DefaultWeightedEdge> lendingGraph) {
+			this.path = path;
+			this.lendingGraph = lendingGraph;
+		}
+		
+		@Override
+		public Double[] call() throws Exception {
+			// TODO Auto-generated method stub
+			Double[] values = new Double[2];
+			try {
+				double weight = 1d;
+				for (DefaultWeightedEdge e : path.getEdgeList()) {
+					weight = weight * lendingGraph.getEdgeWeight(e);
+				}
+				values[0] = weight;
+				
+				int fork = 1;
+				Object endNode = path.getEndVertex();
+				List<Object> nodesList = path.getVertexList();
+				nodesList.remove(endNode);
+				for (Object v : nodesList) {
+					fork = fork * lendingGraph.outDegreeOf(v);
+				}
+				values[1] = (double) fork;
+			} catch (Exception e) {
+				// TODO: handle exception
+				e.printStackTrace();
+			}
+			return values;
+		}
+	
+	}*/
+
+	/*public class trustCalculatorRunnable implements Runnable {
+
+		private final GraphPath<Object, DefaultWeightedEdge> path;
+		private final Graph<Object, DefaultWeightedEdge> lendingGraph;
+		//AtomicReference<Double> weight = new AtomicReference<>();
+		//AtomicReference<Integer> fork = new AtomicReference<>();
+		//public double weight = 1.0;
+		//public int fork = 1;
+		
+		trustCalculatorRunnable(
+				GraphPath<Object, DefaultWeightedEdge> path,
+				Graph<Object, DefaultWeightedEdge> lendingGraph) {
+			this.path = path;
+			this.lendingGraph = lendingGraph;
+		}
+		
+		@Override
+		public void run() {
+			// TODO Auto-generated method stub
+			
+			try {
+				double weight = 1.0;
+				for (DefaultWeightedEdge e : path.getEdgeList()) {
+					weight = weight * lendingGraph.getEdgeWeight(e);
+				}
+				//this.weight.set(weight);
+				
+				int fork = 1;
+				Object endNode = path.getEndVertex();
+				List<Object> nodesList = path.getVertexList();
+				nodesList.remove(endNode);
+				for (Object v : nodesList) {
+					fork = fork * lendingGraph.outDegreeOf(v);
+				}
+				//this.fork.set(fork);
+				
+				//new trustCalculatorRunnableResults(this, weight, fork);
+			} catch (Exception e) {
+				// TODO: handle exception
+				e.printStackTrace();
+			}
+		}
+	
+	}*/
+
+	/*public class trustCalculatorRunnableResults {
+		
+		public Runnable calc;
+		public double weight = 1.0;
+		public int fork = 1;
+		
+		trustCalculatorRunnableResults(Runnable calc, double weight, int fork) {
+			this.calc = calc;
+			this.weight = weight;
+			this.fork = fork;
+		}
+		
+		public double[] getValues () {
+			double[] values = {this.weight, this.fork};
+			return values;
+		}
+	}*/
+	
 	public ArrayList<Counterparty> counterpartyList = new ArrayList<>();
 	ArrayList<LoanRequest> loanRequestList = new ArrayList<>();
 	public ArrayList<Loan> borrowingList = new ArrayList<>();
@@ -113,10 +223,14 @@ public class Bank extends EcoAgent {
 	Double credits[] = {};
 	Double deposits[] = {};
 	Double payments[] = {};
+	Double oAssets[] = {};
+	Double oLiabilities[] = {};
 
 	List<Double> creditsList = new ArrayList<Double>(Arrays.asList(credits));
 	List<Double> depositsList = new ArrayList<Double>(Arrays.asList(deposits));
 	List<Double> paymentsList = new ArrayList<Double>(Arrays.asList(payments));
+	List<Double> oAssetsList = new ArrayList<Double>(Arrays.asList(oAssets));
+	List<Double> oLiabilitiesList = new ArrayList<Double>(Arrays.asList(oLiabilities));
 
 	// Assets:
 	public double cashAndCentralBankDeposit;
@@ -124,6 +238,7 @@ public class Bank extends EcoAgent {
 	public double securities;
 	public double clientCredits;
 	public double interbankClaims;
+	public double otherAssets;
 	
 	// Liabilities:
 	public double equity;
@@ -131,6 +246,7 @@ public class Bank extends EcoAgent {
 	public double clientTermDeposits;
 	public double clientDemandDeposits;
 	public double interbankFunds;
+	public double otherLiabilities;
 	
 	public double position = 0.0;
 	public double liquidityExcessDeficit = 0.0;
@@ -139,10 +255,11 @@ public class Bank extends EcoAgent {
 	public String title;
 	public BankSize size;
 	
-	public double cUncertainty;
-	public double dUncertainty;
-	public double pUncertainty;
-	public double lUncertainty;
+	public double cUncertainty;  // uncertainty in client loans
+	public double dUncertainty;  // uncertainty in client term deposits
+	public double pUncertainty;  // uncertainty in client demand deposits
+	public double lUncertainty;  // uncertainty in lending to other banks
+	public double alUncertainty; // uncertainty in other assets/liabilities change
 	
 	public Bank() {
 		
@@ -173,10 +290,10 @@ public class Bank extends EcoAgent {
 				Math.min(0.85 * interbankClaims, 2 / 3 * (cashAndCentralBankDeposit + securities));
 		
 		// Calculate net cash out-flows:
-		double currentContractualCashOutflow = centralBankFunds - lastBalanceSheet[6]
-				+ clientTermDeposits - lastBalanceSheet[7]
-				+ clientDemandDeposits - lastBalanceSheet[8]
-				+ interbankFunds - lastBalanceSheet[9];
+		double currentContractualCashOutflow = centralBankFunds - lastBalanceSheet[7]
+				+ clientTermDeposits - lastBalanceSheet[8]
+				+ clientDemandDeposits - lastBalanceSheet[9]
+				+ interbankFunds - lastBalanceSheet[10];
 		double currentContractualCashInflow = securities - lastBalanceSheet[2]
 				+ clientCredits - lastBalanceSheet[3]
 				+ interbankClaims - lastBalanceSheet[4];
@@ -285,6 +402,71 @@ public class Bank extends EcoAgent {
 		clientDemandDeposits -= totalPayments;
 	}
 	
+	// This method updates the bank's other assets.
+	public void updateOtherAssets(double lastOtherAssets) {
+		
+		if (oAssetsList.size() == 0) {
+			oAssetsList.add(lastOtherAssets);
+		}
+		double oAssetsMean = oAssetsList.stream()
+				.mapToDouble(Double::doubleValue)
+				.summaryStatistics()
+				.getAverage();
+		double oAssetsStdDeviation = alUncertainty * oAssetsMean;
+		
+		DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
+		defaultRegistry.createNormal(oAssetsMean, oAssetsStdDeviation);
+		otherAssets = defaultRegistry.getNormal().nextDouble();
+		
+		oAssetsList.add(otherAssets);
+		
+		/*double difOtherAssets = lastOtherAssets - otherAssets;
+		double interest = Math.max(0, difOtherAssets * Simulator.termDepositInterest);
+
+		// Accounting:
+		cashAndCentralBankDeposit -= (difclientTermDeposits + interest);
+		equity -= interest;*/
+	}
+	
+	// This method updates the bank's other liabilities.
+	public void updateOtherLiabilities(double lastOtherLiabilities, double lastOtherAssets) {
+		
+		if (oLiabilitiesList.size() == 0) {
+			oLiabilitiesList.add(lastOtherLiabilities);
+		}
+		double oLiabilitiesMean = oLiabilitiesList.stream()
+				.mapToDouble(Double::doubleValue)
+				.summaryStatistics()
+				.getAverage();
+		double oLiabilitiesStdDeviation = alUncertainty * oLiabilitiesMean;
+		
+		DefaultRandomRegistry defaultRegistry = new DefaultRandomRegistry();
+		defaultRegistry.createNormal(oLiabilitiesMean, oLiabilitiesStdDeviation);
+		otherLiabilities = defaultRegistry.getNormal().nextDouble();
+		
+		oLiabilitiesList.add(otherLiabilities);
+		
+		double difOtherAssetsLiabilities = (lastOtherAssets - otherAssets) -
+				(lastOtherLiabilities - otherLiabilities);
+		/*double interest = Math.max(0, difOtherAssets * Simulator.termDepositInterest);*/
+
+		// Accounting:
+		double signDeterminer = RandomHelper.nextDoubleFromTo(0, 1);
+		if (signDeterminer <= 0.5) {
+			if (difOtherAssetsLiabilities < 0) {
+				equity -= difOtherAssetsLiabilities;
+			} else {
+				cashAndCentralBankDeposit += difOtherAssetsLiabilities;
+			}
+		} else {
+			if (difOtherAssetsLiabilities > 0) {
+				equity -= difOtherAssetsLiabilities;
+			} else {
+				cashAndCentralBankDeposit += difOtherAssetsLiabilities;
+			}
+		}
+	}
+	
 	// This method repays the bank's loans that should be repaid in each tick.
 	public boolean repayLoan(Loan loan) {
 		
@@ -296,7 +478,7 @@ public class Bank extends EcoAgent {
 				.mapToDouble(y -> y.getCounterparty().borrowingList.stream()
 							.filter(z -> this.equals(z.lender))
 							.mapToDouble(w -> w.amount).sum()).sum();
-		long maxRepeat = Math.max(1, counterpartyList.stream() // finding maximum possible cycles of repayment 
+		long maxRepeat = Math.max(1, counterpartyList.stream() // finding maximum possible cycles of repayment
 				.filter(x -> CounterpartyType.Lending.equals(x.getType()))
 				.count());
 		Bank l = loan.lender;
@@ -453,6 +635,9 @@ public class Bank extends EcoAgent {
 			Network<Object> network = (Network<Object>) Simulator.context.getProjection("IMM network");
 			network.removeEdge(network.getEdge(this, loan.borrower));
 			network.addEdge(this, loan.borrower, trustLevel);
+			
+			//Update immGraph.
+			Simulator.immGraph.setEdgeWeight(this, loan.borrower, trustLevel);
 		}
 	}
 	
@@ -505,13 +690,15 @@ public class Bank extends EcoAgent {
 				+ lastBalanceSheet[1] - pledgedSecurities
 				+ lastBalanceSheet[2] - securities
 				+ lastBalanceSheet[3] - clientCredits
-				+ lastBalanceSheet[4] - interbankClaims;
+				+ lastBalanceSheet[4] - interbankClaims
+				+ lastBalanceSheet[5] - otherAssets;
 		
-		double defLiabilities = lastBalanceSheet[5] - equity
-				+ lastBalanceSheet[6] - centralBankFunds
-				+ lastBalanceSheet[7] - clientTermDeposits
-				+ lastBalanceSheet[8] - clientDemandDeposits
-				+ lastBalanceSheet[9] - interbankFunds;
+		double defLiabilities = lastBalanceSheet[6] - equity
+				+ lastBalanceSheet[7] - centralBankFunds
+				+ lastBalanceSheet[8] - clientTermDeposits
+				+ lastBalanceSheet[9] - clientDemandDeposits
+				+ lastBalanceSheet[10] - interbankFunds
+				+ lastBalanceSheet[11] - otherLiabilities;
 		
 		liquidityExcessDeficit = defAssets - defLiabilities;
 	}
@@ -607,6 +794,9 @@ public class Bank extends EcoAgent {
 				System.out.println("	Bank "+potentialLender.title
 						+" accepted the request of bank "+title
 						+". Loan amount = "+loan.amount);
+				
+				// Update immGraph.
+				Simulator.immGraph.addEdge(potentialLender, this);
 			} else {
 				
 				// Print the status:
@@ -681,6 +871,9 @@ public class Bank extends EcoAgent {
 				counterpartyList.add(c);
 				
 				evaluateLender(request);
+				
+				// Update immGraph.
+				Simulator.immGraph.addEdge(potentialLender, this);
 			} else {
 				
 				// Print the status:
@@ -748,7 +941,11 @@ public class Bank extends EcoAgent {
 			if (Simulator.trustScenario) {
 				expectedTrust = calculateTrustMarket();
 				trustLevel = calculateTrustLevel(requestor);
-				confirmed = (expectedTrust + trustLevel > 4) ? true : false;
+				if (trustLevel < -1) {
+					confirmed = (randomDecision > lUncertainty) ? true : false;
+				} else {
+					confirmed = (expectedTrust + trustLevel > 4) ? true : false;
+				}
 				interestRate = RandomHelper.nextDoubleFromTo(Simulator.corridorDown, Simulator.corridorUp);
 			} else {
 				randomDecision = RandomHelper.nextDoubleFromTo(0, 1);
@@ -855,50 +1052,44 @@ public class Bank extends EcoAgent {
 	// (VERY BAD PERFORMANCE)
 	public int calculateTrustLevel(Bank borrower) {
 		
-		int trustLevel = 0;
+		int trustLevel = -2; // -2 means there is not enough data to calculate the trust level.
 		if (borrower == this ) {
 			trustLevel = 4;
 			return trustLevel;
 		}
 		
-		//boolean foundLast = false;
+		AllDirectedPaths<Object, DefaultWeightedEdge> path = new AllDirectedPaths<>(Simulator.immGraph);
 		List<GraphPath<Object, DefaultWeightedEdge>> allPathsToBorrower = new ArrayList<>();
-		allPathsToBorrower = Simulator.findAllPaths(this, borrower);
+		try {
+			allPathsToBorrower = path.getAllPaths(this, borrower, true, null);
+		} catch (Exception e) {
+			// TODO: handle exception
+			e.printStackTrace();
+		}
+		/*List<GraphPath<Object, DefaultWeightedEdge>> allPathsToBorrower = new ArrayList<>();
+		allPathsToBorrower = Simulator.findAllPaths(this, borrower);*/
+		
 		if (allPathsToBorrower.size() > 0) {
-			Graph<Object, DefaultWeightedEdge> baseGraph = allPathsToBorrower.get(0).getGraph();
 			
 			// Create a smaller graph containing only the nodes between the source and the target. 
-			List<Object> vList = new ArrayList<>();
-			for (int i = 0; i < allPathsToBorrower.size(); i++) {
-				allPathsToBorrower.get(i).getVertexList().forEach(v -> {
-					if (!vList.contains(v)) {
-						vList.add(v);
-					}
-				});
-			}
-			List<DefaultWeightedEdge> eList = new ArrayList<>();
-			for (int i = 0; i < allPathsToBorrower.size(); i++) {
-				allPathsToBorrower.get(i).getEdgeList().forEach(e -> {
-					if (!eList.contains(e)) {
-						eList.add(e);
-					}
-				});
-			}
 			Graph<Object, DefaultWeightedEdge> lendingGraph =
 					new DefaultDirectedWeightedGraph<>(DefaultWeightedEdge.class);
-			for (Object v : vList) {
-				lendingGraph.addVertex(v);
-			}
-			for (DefaultWeightedEdge e : eList) {
-				Object source = baseGraph.getEdgeSource(e);
-				Object target = baseGraph.getEdgeTarget(e);
-				double weight = baseGraph.getEdgeWeight(e);
-				lendingGraph.addEdge(source, target);
-				lendingGraph.setEdgeWeight(source, target, weight);
+			
+			for (int i = 0; i < allPathsToBorrower.size(); i++) {
+				allPathsToBorrower.get(i).getVertexList().forEach(v -> {
+					lendingGraph.addVertex(v);
+				});
+				allPathsToBorrower.get(i).getEdgeList().forEach(e -> {
+					Object source = Simulator.immGraph.getEdgeSource(e);
+					Object target = Simulator.immGraph.getEdgeTarget(e);
+					double weight = Simulator.immGraph.getEdgeWeight(e);
+					lendingGraph.addEdge(source, target);
+					lendingGraph.setEdgeWeight(source, target, weight);
+				});
 			}
 			
 			// Calculate the level of trust.
-			int minConsented = (int) (Simulator.bankList.size() - 1) /3;
+			int minConsented = (int) (Simulator.bankList.size() - 1) / 3;
 			int maxConsented = (int) (2 * Simulator.bankList.size() + 1) / 3;
 			trustLevel = (int) Math.round(allPathsToBorrower.parallelStream()
 					.filter(p -> /*p.getLength() > minConsented &&*/ p.getLength() < maxConsented)
@@ -913,18 +1104,80 @@ public class Bank extends EcoAgent {
 											.reduce(1, (a, b) -> a * b)
 					)
 					.sum());
+			/*trustLevel = (int) Math.round(allPathsToBorrower.stream()
+					.filter(p -> p.getLength() < maxConsented)
+					.mapToDouble(p ->
+							1 / Math.pow(4, p.getLength() - 1)
+									* p.getEdgeList().parallelStream()
+											.mapToDouble(e -> lendingGraph.getEdgeWeight(e))
+											.reduce(1, (a, b) -> a * b)
+									/ p.getEdgeList().parallelStream()
+											.map(e -> lendingGraph.getEdgeSource(e))
+											.map(v -> lendingGraph.outDegreeOf(v))
+											.reduce(1, (a, b) -> a * b)
+					)
+					.sum());*/
 			// Another implementation of this part:
 			/*for (int i = 0; i < allPathsToBorrower.size(); i++) {
-				GraphPath<Object, DefaultWeightedEdge> path = allPathsToBorrower.get(i);
-				int size = path.getLength();
-				double weight = path.getEdgeList().stream()
-						.mapToDouble(e -> lendingGraph.getEdgeWeight(e))
-						.reduce(1, (a, b) -> a * b);
-				int fork = path.getEdgeList().stream()
-						.map(e -> lendingGraph.getEdgeSource(e))
-						.map(v -> lendingGraph.outDegreeOf(v))
-						.reduce(1, (a, b) -> a * b);
+			GraphPath<Object, DefaultWeightedEdge> p = allPathsToBorrower.get(i);
+			int size = p.getLength();
+			double weight = p.getEdgeList().parallelStream()
+					.mapToDouble(e -> lendingGraph.getEdgeWeight(e))
+					.reduce(1, (a, b) -> a * b);
+			int fork = p.getEdgeList().parallelStream()
+					.map(e -> lendingGraph.getEdgeSource(e))
+					.map(v -> lendingGraph.outDegreeOf(v))
+					.reduce(1, (a, b) -> a * b);
+			trustLevel += (int) Math.round(weight / fork / Math.pow(4, size - 1));
+			}*/
+			/*for (int i = 0; i < allPathsToBorrower.size(); i++) {
+				GraphPath<Object, DefaultWeightedEdge> p = allPathsToBorrower.get(i);
+				int size = p.getLength();
+				
+				double weight = 1.0;
+				for (DefaultWeightedEdge e : p.getEdgeList()) {
+					weight = weight * lendingGraph.getEdgeWeight(e);
+				}
+				
+				int fork = 1;
+				Object endNode = p.getEndVertex();
+				List<Object> nodesList = p.getVertexList();
+				nodesList.remove(endNode);
+				for (Object v : nodesList) {
+					fork = fork * lendingGraph.outDegreeOf(v);
+				}
+				
 				trustLevel += (int) Math.round(weight / fork / Math.pow(4, size - 1));
+			}*/
+			
+			/*ExecutorService pool = Executors.newFixedThreadPool(12);//.newCachedThreadPool();
+			Set<Future<Double[]>> set = new HashSet<>();
+			try {
+				for (int i = 0; i < allPathsToBorrower.size(); i++) {
+					GraphPath<Object, DefaultWeightedEdge> p = allPathsToBorrower.get(i);
+					
+					int size = p.getLength();
+					Callable<Double[]> callable = new trustCalculatorCallable(p, lendingGraph);
+					Future<Double[]> future = pool.submit(callable);
+					set.add(future);
+					
+					double weight = 1d;
+					int fork = 1;
+					for (Future<Double[]> f : set) {
+						Double[] values = f.get();
+						weight = weight * values[0];
+						fork = fork * (int) Math.round(values[1]);
+					}
+					trustLevel += (int) Math.round(weight / fork / Math.pow(4, size - 1));
+				}
+			} catch (Exception e) {
+				// TODO: handle exception
+				e.printStackTrace();
+			}*/
+			
+			/*executor.shutdown();
+			while (!executor.isTerminated()) {
+				// empty body
 			}*/
 		}
 
@@ -942,14 +1195,17 @@ public class Bank extends EcoAgent {
 		double baseEquity = 0;
 		if (size == BankSize.Small) {
 			sizeTrust = 1;
-			baseEquity = Simulator.smallBanksMean * Simulator.balanceSheetShare[0][5];
+			//baseEquity = Simulator.smallBanksMean * Simulator.balanceSheetShare[0][5];
+			baseEquity = Simulator.smallBanksMean * Simulator.balanceSheetShare[0][6];
 		}
 		else if (size == BankSize.Large) {
 			sizeTrust = -1;
-			baseEquity = Simulator.largeBanksMean * Simulator.balanceSheetShare[2][5];
+			//baseEquity = Simulator.largeBanksMean * Simulator.balanceSheetShare[2][5];
+			baseEquity = Simulator.largeBanksMean * Simulator.balanceSheetShare[2][6];
 		}
 		else {
-			baseEquity = Simulator.mediumBanksMean * Simulator.balanceSheetShare[1][5];
+			//baseEquity = Simulator.mediumBanksMean * Simulator.balanceSheetShare[1][5];
+			baseEquity = Simulator.mediumBanksMean * Simulator.balanceSheetShare[1][6];
 		}
 		int equityTrust = (equity > baseEquity) ? 2 :
 			(equity < baseEquity) ? 0 : 1;

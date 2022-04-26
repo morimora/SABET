@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <parameters>
 				<parameter name="bank_count" displayName="Bank count" type="int" 
-						defaultValue="401" 
+						defaultValue="413" 
 						isReadOnly="false" 
 						converter="repast.simphony.parameter.StringConverterFactory$IntConverter"
 											/>
