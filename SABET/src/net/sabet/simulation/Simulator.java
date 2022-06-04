@@ -385,14 +385,17 @@ public class Simulator implements ContextBuilder<Object> {
 				Long capacity = bankList.get(index).counterpartyList.stream()
 						.filter(x -> CounterpartyType.Lending.equals(x.getType()))
 						.count();
-				while (index == bankList.indexOf(b)
+				int counter = 0;
+				while (counter < randomMax && (
+						index == bankList.indexOf(b)
 						|| checkConflict(b, bankList.get(index))
 						|| checkRepeatedRandom(indexList, index)
-						|| capacity > counterpartyMax) {
+						|| capacity > counterpartyMax)) {
 					index = RandomHelper.nextIntFromTo(0,bankCount-1);
 					capacity = bankList.get(index).counterpartyList.stream()
 							.filter(x -> CounterpartyType.Lending.equals(x.getType()))
 							.count();
+					counter ++;
 				}
 				Bank lender = (Bank) bankList.get(index);
 				indexList.add(index);
